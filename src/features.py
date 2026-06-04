@@ -23,25 +23,31 @@ def update_elo(rating: float, expected: float, actual: float, k: float = K_FACTO
     return rating + k * (actual - expected)
 
 
-def compute_elo_ratings(df_all: pd.DataFrame) -> pd.DataFrame:
-    """Calcula ELO pre-match sobre todos los partidos internacionales en orden cronológico."""
+def compute_elo_ratings(df_all: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, float]]:
+    """Calcula ELO pre-match sobre todos los partidos internacionales en orden cronológico.
+
+    Retorna (df con columnas elo_home/elo_away/elo_diff, dict con ratings finales).
+    Partidos sin resultado (NaN en scores) se registran con el ELO actual pero no actualizan ratings.
+    """
     df = df_all.sort_values("date").reset_index(drop=True)
     ratings: Dict[str, float] = {}
 
-    elo_home_pre, elo_away_pre = [], []
+    elo_home_pre = np.empty(len(df))
+    elo_away_pre = np.empty(len(df))
 
-    for _, row in df.iterrows():
-        home, away = row["home_team"], row["away_team"]
+    for i, row in enumerate(df.itertuples(index=False)):
+        home, away = row.home_team, row.away_team
         r_home = ratings.get(home, INITIAL_ELO)
         r_away = ratings.get(away, INITIAL_ELO)
 
-        elo_home_pre.append(r_home)
-        elo_away_pre.append(r_away)
+        elo_home_pre[i] = r_home
+        elo_away_pre[i] = r_away
+
+        hs, as_ = row.home_score, row.away_score
+        if pd.isna(hs) or pd.isna(as_):
+            continue  # partido sin resultado — no actualiza ratings
 
         exp_home = expected_score(r_home, r_away)
-        exp_away = 1 - exp_home
-
-        hs, as_ = row["home_score"], row["away_score"]
         if hs > as_:
             actual_home, actual_away = 1.0, 0.0
         elif hs == as_:
@@ -50,13 +56,13 @@ def compute_elo_ratings(df_all: pd.DataFrame) -> pd.DataFrame:
             actual_home, actual_away = 0.0, 1.0
 
         ratings[home] = update_elo(r_home, exp_home, actual_home)
-        ratings[away] = update_elo(r_away, exp_away, actual_away)
+        ratings[away] = update_elo(r_away, 1 - exp_home, actual_away)
 
     df = df.copy()
     df["elo_home"] = elo_home_pre
     df["elo_away"] = elo_away_pre
     df["elo_diff"] = df["elo_home"] - df["elo_away"]
-    return df
+    return df, ratings
 
 
 def rolling_goals(df: pd.DataFrame, team_col: str, scored_col: str, conceded_col: str, n: int = 5) -> pd.DataFrame:
@@ -111,10 +117,20 @@ def compute_wc_experience(df_wc: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def save_current_elo(ratings: Dict[str, float], path: Path = DATA_PROCESSED / "elo_current.json") -> None:
+    """Guarda el estado final de los ratings ELO (para predicciones en la app)."""
+    import json
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ranked = dict(sorted(ratings.items(), key=lambda x: x[1], reverse=True))
+    with open(path, "w") as f:
+        json.dump(ranked, f, indent=2)
+    logger.info("elo_current.json guardado: %d equipos en %s", len(ranked), path)
+
+
 def build_feature_matrix(df_all: pd.DataFrame, df_wc: pd.DataFrame) -> pd.DataFrame:
     """Pipeline completo: ensambla todas las features para los partidos de Mundial."""
     logger.info("Calculando ELO sobre %d partidos históricos...", len(df_all))
-    df_elo = compute_elo_ratings(df_all)
+    df_elo, _ = compute_elo_ratings(df_all)
 
     # Tomar ELOs en los partidos de Mundial
     wc_with_elo = df_wc.merge(

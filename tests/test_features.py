@@ -35,12 +35,28 @@ def _make_results():
 
 def test_compute_elo_starts_at_initial():
     df = _make_results()
-    result = compute_elo_ratings(df)
+    result, _ = compute_elo_ratings(df)
     assert result.iloc[0]["elo_home"] == INITIAL_ELO
     assert result.iloc[0]["elo_away"] == INITIAL_ELO
 
 
 def test_compute_elo_diff_column_exists():
     df = _make_results()
-    result = compute_elo_ratings(df)
+    result, _ = compute_elo_ratings(df)
     assert "elo_diff" in result.columns
+
+
+def test_compute_elo_returns_ratings_dict():
+    df = _make_results()
+    _, ratings = compute_elo_ratings(df)
+    assert isinstance(ratings, dict)
+    assert "A" in ratings and "B" in ratings
+
+
+def test_compute_elo_skips_nan_scores():
+    df = _make_results().copy()
+    df.loc[0, "home_score"] = float("nan")
+    result, ratings = compute_elo_ratings(df)
+    # primer partido sin resultado: ELOs se registran pero ratings no cambian
+    assert result.iloc[0]["elo_home"] == INITIAL_ELO
+    assert result.iloc[1]["elo_home"] == INITIAL_ELO  # A no fue actualizado
