@@ -368,7 +368,7 @@ function GoalscorersTable({ goalscorers }: { goalscorers: Goalscorer[] }) {
                   {T.victimsTitle}
                 </p>
 
-                {active.victims.length === 0 ? (
+                {(active.victims ?? []).length === 0 ? (
                   <p className="text-xs italic" style={{ color: "var(--color-ink-muted, #4A4A6A)" }}>
                     {T.noDataAvailable}
                   </p>

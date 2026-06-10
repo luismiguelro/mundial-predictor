@@ -421,6 +421,21 @@ def main():
             .reset_index(name="goals")
             .sort_values("goals", ascending=False)
         )
+
+        # víctimas: equipos a los que les marcó cada goleador (usado por FunFacts)
+        df_gs_wc["opponent"] = df_gs_wc.apply(
+            lambda r: r["away_team"] if r["team"] == r["home_team"] else r["home_team"],
+            axis=1,
+        )
+
+        def _victims(scorer: str, country: str) -> list:
+            sub = df_gs_wc[(df_gs_wc["scorer"] == scorer) & (df_gs_wc["team"] == country)]
+            agg = sub.groupby("opponent").size().sort_values(ascending=False)
+            return [
+                {"team": opp, "flag": TEAM_FLAGS.get(opp, "🏳️"), "goals": int(n)}
+                for opp, n in agg.items()
+            ]
+
         goalscorers_out = [
             {
                 "rank": i + 1,
@@ -428,6 +443,7 @@ def main():
                 "country": row["team"],
                 "flag": TEAM_FLAGS.get(row["team"], "🏳️"),
                 "goals": int(row["goals"]),
+                "victims": _victims(row["scorer"], row["team"]),
             }
             for i, row in enumerate(scorer_agg.head(30).to_dict("records"))
         ]
