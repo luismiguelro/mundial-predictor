@@ -34,10 +34,10 @@ function MatchCard({ match, liveScores }: { match: GroupMatch; liveScores?: Live
   return (
     <div className="stat-card p-4 text-left" style={score ? { borderColor: "rgba(212,168,67,0.35)" } : undefined}>
       <div className="flex justify-between items-center text-xs text-[var(--text-muted)] mb-3">
-        <span>📅 {dateStr}</span>
+        <span className="uppercase tracking-wider">{dateStr}</span>
         {score
           ? <span className="final-tag">✓ {T.finalTag}</span>
-          : <span className="text-right truncate max-w-[55%]">🏟 {venue}</span>}
+          : <span className="text-right truncate max-w-[55%]">{venue}</span>}
       </div>
 
       <div className="flex items-center gap-2 mb-2.5">
@@ -73,7 +73,6 @@ function StandingsCard({ standings }: { standings: GroupStandingEntry[] }) {
   return (
     <div className="stat-card text-left">
       <h4 className="font-bold text-sm mb-3 flex items-center gap-2">
-        <span>📊</span>
         <span>{T.groupPredTitle}</span>
         <span className="text-[var(--text-muted)] font-normal text-xs">(5 000 sims)</span>
       </h4>

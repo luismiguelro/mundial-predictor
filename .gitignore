@@ -56,3 +56,5 @@ desktop.ini
 .pytest_cache/
 htmlcov/
 .coverage
+
+.vercel
