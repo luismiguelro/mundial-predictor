@@ -454,6 +454,17 @@ def get_live_fixture() -> list:
     return fetch_live_fixture()
 
 
+@st.cache_resource
+def get_shootout_stats() -> dict:
+    """Historial de tandas de penales por equipo (para tiebreaker en knockout)."""
+    from src.extractor import load_shootouts
+    from src.simulator import build_shootout_stats
+    try:
+        return build_shootout_stats(load_shootouts())
+    except FileNotFoundError:
+        return {}
+
+
 # ─── Helpers de predicción ────────────────────────────────────────────────────
 
 def get_team_features(df_features: pd.DataFrame, team: str) -> dict:
@@ -717,14 +728,22 @@ def _group_card(group_name, teams, model, elo_ratings, df_features, live_matches
 
 
 def tab_simulator(model, df_features, elo_ratings, T, probs_cache=None):
-    from src.simulator import WC2026_GROUPS, WC2026_TEAMS, monte_carlo, simulate_deterministic_tournament
+    from src.simulator import (
+        WC2026_GROUPS, WC2026_TEAMS, build_fixed_results,
+        monte_carlo, simulate_deterministic_tournament,
+    )
 
     live_matches = get_live_fixture()
     played = [m for m in live_matches if m.get("score1") is not None]
+    fixed_results = build_fixed_results(live_matches)
+    shootout_stats = get_shootout_stats()
 
     # ── Estado del torneo ───────────────────────────────────────────────────
     if played:
-        st.success(f"📡 {len(played)} partido(s) jugado(s). Standings actualizados con resultados reales.")
+        st.success(
+            f"📡 {len(played)} partido(s) jugado(s). Las simulaciones fijan esos "
+            f"resultados reales: las probabilidades son condicionales a lo que ya pasó."
+        )
     else:
         st.info(T["no_live"])
 
@@ -819,7 +838,10 @@ def tab_simulator(model, df_features, elo_ratings, T, probs_cache=None):
 
     if st.button(T["run_sim"], type="primary"):
         with st.spinner("Simulando torneos…"):
-            df_mc = monte_carlo(model, elo_ratings, df_features, n=n_sim, probs_cache=probs_cache)
+            df_mc = monte_carlo(
+                model, elo_ratings, df_features, n=n_sim, probs_cache=probs_cache,
+                shootout_stats=shootout_stats, fixed_results=fixed_results,
+            )
 
         # Tabla completa
         cols_map = {

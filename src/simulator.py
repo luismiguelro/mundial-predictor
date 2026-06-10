@@ -255,7 +255,40 @@ def predict_match(
     return {"team1_win": float(proba[0]), "draw": float(proba[1]), "team2_win": float(proba[2])}
 
 
-# ─── 3. Muestreo de resultados ────────────────────────────────────────────────
+# ─── 3. Penales — historial de tandas por equipo ──────────────────────────────
+
+def build_shootout_stats(df_shootouts: pd.DataFrame) -> Dict[str, dict]:
+    """Pre-computa {equipo: {wins, total}} desde shootouts.csv (nombres normalizados)."""
+    stats: Dict[str, dict] = defaultdict(lambda: {"wins": 0, "total": 0})
+    for row in df_shootouts.itertuples(index=False):
+        for team in (row.home_team, row.away_team):
+            stats[team]["total"] += 1
+            if row.winner == team:
+                stats[team]["wins"] += 1
+    return dict(stats)
+
+
+def shootout_win_prob(
+    team1: str,
+    team2: str,
+    shootout_stats: Optional[Dict[str, dict]] = None,
+) -> float:
+    """P(team1 gana la tanda) según historial, con suavizado hacia 0.5.
+
+    Cada equipo aporta su win rate suavizado (Laplace: +2 victorias / +4 tandas,
+    prior 0.5); la probabilidad del cruce es Bradley-Terry entre ambos rates.
+    Sin historial para ambos → 0.5 exacto.
+    """
+    if not shootout_stats:
+        return 0.5
+    s1 = shootout_stats.get(team1, {"wins": 0, "total": 0})
+    s2 = shootout_stats.get(team2, {"wins": 0, "total": 0})
+    r1 = (s1["wins"] + 2) / (s1["total"] + 4)
+    r2 = (s2["wins"] + 2) / (s2["total"] + 4)
+    return r1 / (r1 + r2)
+
+
+# ─── 4. Muestreo de resultados ────────────────────────────────────────────────
 
 def _sample_outcome(probs: ProbsDict) -> str:
     r = random.random()
@@ -266,15 +299,24 @@ def _sample_outcome(probs: ProbsDict) -> str:
     return "team2_win"
 
 
-def _sample_knockout(probs: ProbsDict, team1: str, team2: str) -> str:
-    """Knockout: empate → penales (50/50)."""
+def _sample_knockout(
+    probs: ProbsDict,
+    team1: str,
+    team2: str,
+    shootout_stats: Optional[Dict[str, dict]] = None,
+) -> str:
+    """Knockout: empate → penales ponderados por historial de tandas."""
     outcome = _sample_outcome(probs)
     if outcome == "draw":
-        outcome = "team1_win" if random.random() < 0.5 else "team2_win"
+        p1 = shootout_win_prob(team1, team2, shootout_stats)
+        outcome = "team1_win" if random.random() < p1 else "team2_win"
     return team1 if outcome == "team1_win" else team2
 
 
-# ─── 4. Simulación de grupo ───────────────────────────────────────────────────
+# ─── 5. Simulación de grupo ───────────────────────────────────────────────────
+
+FixedResults = Dict[frozenset, Optional[str]]  # {frozenset({t1,t2}): winner | None=empate}
+
 
 def simulate_group(
     teams: List[str],
@@ -282,12 +324,26 @@ def simulate_group(
     elo_ratings: Dict[str, float],
     df_features: pd.DataFrame,
     probs_cache: Optional[PropsCache] = None,
+    fixed_results: Optional[FixedResults] = None,
 ) -> Tuple[Dict[str, int], List[str]]:
-    """Simula los 6 partidos de un grupo. Retorna (puntos, clasificación)."""
+    """Simula los 6 partidos de un grupo. Retorna (puntos, clasificación).
+
+    Partidos presentes en fixed_results (ya jugados en el torneo real) no se
+    simulan: se fija su resultado real.
+    """
     points: Dict[str, int] = defaultdict(int)
 
     for i, t1 in enumerate(teams):
         for t2 in teams[i + 1:]:
+            pair = frozenset((t1, t2))
+            if fixed_results is not None and pair in fixed_results:
+                winner = fixed_results[pair]
+                if winner is None:
+                    points[t1] += 1
+                    points[t2] += 1
+                else:
+                    points[winner] += 3
+                continue
             probs = predict_match(model, t1, t2, elo_ratings, df_features, probs_cache)
             outcome = _sample_outcome(probs)
             if outcome == "team1_win":
@@ -322,7 +378,7 @@ def get_group_match_probs(
     return matches
 
 
-# ─── 5. Simulación completa del torneo ───────────────────────────────────────
+# ─── 6. Simulación completa del torneo ───────────────────────────────────────
 
 def simulate_tournament(
     model,
@@ -330,6 +386,8 @@ def simulate_tournament(
     df_features: pd.DataFrame,
     groups: Optional[Dict[str, List[str]]] = None,
     probs_cache: Optional[PropsCache] = None,
+    shootout_stats: Optional[Dict[str, dict]] = None,
+    fixed_results: Optional[FixedResults] = None,
 ) -> Dict[str, str]:
     """
     Simula un torneo completo.
@@ -348,7 +406,9 @@ def simulate_tournament(
     group_points: Dict[str, Dict[str, int]] = {}
 
     for gname, teams in groups.items():
-        pts, standing = simulate_group(teams, model, elo_ratings, df_features, probs_cache)
+        pts, standing = simulate_group(
+            teams, model, elo_ratings, df_features, probs_cache, fixed_results
+        )
         group_standings[gname] = standing
         group_points[gname] = pts
 
@@ -380,7 +440,7 @@ def simulate_tournament(
         for i in range(0, len(current), 2):
             t1, t2 = current[i], current[i + 1]
             probs = predict_match(model, t1, t2, elo_ratings, df_features, probs_cache)
-            winner = _sample_knockout(probs, t1, t2)
+            winner = _sample_knockout(probs, t1, t2, shootout_stats)
             winners.append(winner)
 
         for t in winners:
@@ -392,7 +452,7 @@ def simulate_tournament(
     return results
 
 
-# ─── 6. Monte Carlo ──────────────────────────────────────────────────────────
+# ─── 7. Monte Carlo ──────────────────────────────────────────────────────────
 
 def monte_carlo(
     model,
@@ -401,10 +461,14 @@ def monte_carlo(
     n: int = 1000,
     groups: Optional[Dict[str, List[str]]] = None,
     probs_cache: Optional[PropsCache] = None,
+    shootout_stats: Optional[Dict[str, dict]] = None,
+    fixed_results: Optional[FixedResults] = None,
 ) -> pd.DataFrame:
     """
     Corre n simulaciones y retorna DataFrame con % de llegar a cada ronda.
     Con probs_cache el bucle es puro Python sin pandas ni sklearn — muy rápido.
+    Con fixed_results, los partidos ya jugados del torneo real quedan fijos y
+    las probabilidades resultantes son condicionales a esos resultados.
     """
     if groups is None:
         groups = WC2026_GROUPS
@@ -413,7 +477,10 @@ def monte_carlo(
     counts: Dict[str, Dict[str, int]] = {t: defaultdict(int) for t in all_teams}
 
     for _ in range(n):
-        sim = simulate_tournament(model, elo_ratings, df_features, groups, probs_cache)
+        sim = simulate_tournament(
+            model, elo_ratings, df_features, groups, probs_cache,
+            shootout_stats, fixed_results,
+        )
         for team, round_reached in sim.items():
             if team not in counts:
                 continue
@@ -527,6 +594,28 @@ def fetch_live_fixture(cache_path: Path = FIXTURE_PATH) -> List[Dict]:
 
 def get_played_matches(matches: List[Dict]) -> List[Dict]:
     return [m for m in matches if m.get("score1") is not None and m.get("score2") is not None]
+
+
+def build_fixed_results(matches: List[Dict]) -> FixedResults:
+    """Convierte partidos de grupos ya jugados (fixture live) en FixedResults.
+
+    Solo fase de grupos: el knockout real define los cruces, no los simula.
+    """
+    fixed: FixedResults = {}
+    for m in get_played_matches(matches):
+        if not str(m.get("group", "")).startswith("Group"):
+            continue
+        t1 = normalize_name(m["team1"])
+        t2 = normalize_name(m["team2"])
+        s1, s2 = int(m["score1"]), int(m["score2"])
+        if s1 > s2:
+            winner: Optional[str] = t1
+        elif s2 > s1:
+            winner = t2
+        else:
+            winner = None
+        fixed[frozenset((t1, t2))] = winner
+    return fixed
 
 
 def get_group_live_standings(matches: List[Dict], group_name: str) -> Optional[pd.DataFrame]:

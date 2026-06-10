@@ -8,3 +8,6 @@ pytest>=8.0
 numpy>=1.26
 openpyxl
 pyarrow
+kagglehub
+python-dotenv
+requests

@@ -1,0 +1,461 @@
+@import "tailwindcss";
+
+/* ── Tokens de diseño (dark default) ── */
+@theme {
+  --color-wc-red:          #CF0A2C;
+  --color-wc-red-dark:     #8B0019;
+  --color-wc-gold:         #D4A843;
+  --color-wc-gold-bright:  #F5CC6A;
+  --color-wc-gold-dim:     #8B6914;
+  --color-wc-green:        #006847;
+  --color-wc-blue:         #1C3F94;
+  --color-wc-cyan:         #00E5FF;
+
+  --color-arena-void:      #07070F;
+  --color-arena-deep:      #0C0C17;
+  --color-arena-card:      #111120;
+  --color-arena-elevated:  #18182A;
+
+  --color-ink-primary:     #F4F4FF;
+  --color-ink-secondary:   #8888AA;
+  --color-ink-muted:       #42425E;
+
+  --font-display: "Bebas Neue", system-ui;
+  --font-heading: "Barlow Condensed", system-ui;
+  --font-body:    "DM Sans", system-ui;
+  --font-mono:    "JetBrains Mono", monospace;
+
+  --animate-shimmer: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ══════════════════════════════════════════════
+   TEMA CLARO
+══════════════════════════════════════════════ */
+[data-theme="light"] {
+  --color-arena-void:      #F5F5F3;
+  --color-arena-deep:      #EBEBEA;
+  --color-arena-card:      #FFFFFF;
+  --color-arena-elevated:  #EFEEEC;
+  --color-ink-primary:     #0A0A16;
+  --color-ink-secondary:   #484860;
+  --color-ink-muted:       #87879A;
+  --border-subtle:         rgba(0,0,0,0.07);
+  --surface:               #FFFFFF;
+  --surface-2:             #EFEEEC;
+  --text:                  #0A0A16;
+  --text-muted:            #484860;
+}
+
+[data-theme="light"] body {
+  background-color: #F5F5F3;
+}
+
+[data-theme="light"] .stat-card {
+  background: #FFFFFF;
+  border-color: rgba(0,0,0,0.08);
+}
+[data-theme="light"] .stat-card:hover {
+  border-color: rgba(207,10,44,0.22);
+}
+
+[data-theme="light"] .shimmer-skeleton {
+  background: linear-gradient(
+    90deg,
+    #EBEBEA 25%, #E0E0DE 37%, #EBEBEA 63%
+  );
+  background-size: 400% 100%;
+  animation: var(--animate-shimmer);
+}
+
+[data-theme="light"] .team-select {
+  background: #EFEEEC;
+  border-color: rgba(0,0,0,0.10);
+  color: #0A0A16;
+}
+[data-theme="light"] .team-select:focus {
+  border-color: var(--color-wc-red);
+}
+
+[data-theme="light"] table thead th {
+  border-bottom-color: rgba(0,0,0,0.08);
+}
+[data-theme="light"] table tbody tr {
+  border-bottom-color: rgba(0,0,0,0.05);
+}
+[data-theme="light"] table tbody tr:hover {
+  background: rgba(0,0,0,0.025);
+}
+
+[data-theme="light"] .recharts-text {
+  fill: #87879A !important;
+}
+[data-theme="light"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #FFFFFF !important;
+  border-color: rgba(0,0,0,0.09) !important;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(207,10,44,0.30);
+}
+
+/* ── Keyframes ── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes rotate-border {
+  from { --angle: 0deg; }
+  to   { --angle: 360deg; }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(212,168,67,0.35); }
+  50%       { box-shadow: 0 0 20px rgba(212,168,67,0.75); }
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(207,10,44,0.55); }
+  50%       { opacity: 0.6; box-shadow: 0 0 0 5px rgba(207,10,44,0); }
+}
+
+/* ── Reset ── */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--color-arena-void);
+  color: var(--color-ink-primary);
+  font-family: var(--font-body);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(207,10,44,0.45); border-radius: 0; }
+
+/* ══════════════════════════════════════════════
+   NAVBAR — siempre oscura (identidad de marca)
+══════════════════════════════════════════════ */
+.navbar-wc {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  background: rgba(7,7,15,0.95);
+  border-bottom: 1px solid rgba(207,10,44,0.20);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ══════════════════════════════════════════════
+   HERO — siempre oscuro
+══════════════════════════════════════════════ */
+.hero-brand {
+  position: relative;
+  padding-top: 56px;
+  background: #07070F;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════════════════════
+   ACCENT BAR — tricolor de los 3 anfitriones
+   🇨🇦 rojo · 🇺🇸 azul · 🇲🇽 verde
+══════════════════════════════════════════════ */
+.accent-bar {
+  height: 4px;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--color-wc-red)   0%,   var(--color-wc-red)   33.3%,
+    var(--color-wc-blue)  33.3%, var(--color-wc-blue)  66.6%,
+    var(--color-wc-green) 66.6%, var(--color-wc-green) 100%
+  );
+  flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════
+   LIVE — punto pulsante y marcador real
+══════════════════════════════════════════════ */
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-wc-red);
+  flex-shrink: 0;
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+.score-final {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-primary);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.final-tag {
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-wc-gold);
+  border: 1px solid rgba(212,168,67,0.4);
+  border-radius: 2px;
+  padding: 0.12rem 0.4rem;
+}
+
+/* ══════════════════════════════════════════════
+   SECTION DIVIDER
+══════════════════════════════════════════════ */
+.section-divider {
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-wc-red) 0%, transparent 80%);
+  margin: 2rem 0;
+}
+
+/* ══════════════════════════════════════════════
+   TABS — underline style
+══════════════════════════════════════════════ */
+.tab-nav-bar {
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+[data-theme="light"] .tab-nav-bar {
+  border-bottom-color: rgba(0,0,0,0.08);
+}
+
+.tab-btn {
+  padding: 0.875rem 1.1rem;
+  border-radius: 0;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.09em;
+  color: var(--color-ink-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-transform: uppercase;
+  transition: color 0.14s ease, border-bottom-color 0.14s ease;
+}
+.tab-btn:hover {
+  color: var(--color-ink-secondary);
+  border-bottom-color: rgba(207,10,44,0.28);
+}
+.tab-btn.active {
+  color: var(--color-ink-primary);
+  border-bottom-color: var(--color-wc-red);
+}
+
+/* ══════════════════════════════════════════════
+   TICKER
+══════════════════════════════════════════════ */
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 55s linear infinite;
+}
+.ticker-track:hover { animation-play-state: paused; }
+
+/* ══════════════════════════════════════════════
+   CARDS
+══════════════════════════════════════════════ */
+.stat-card {
+  background: var(--color-arena-card);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px;
+  padding: 1.25rem;
+  transition: border-color 0.15s, transform 0.15s, background 0.25s;
+}
+.stat-card:hover {
+  border-color: rgba(207,10,44,0.28);
+  transform: translateY(-2px);
+}
+
+.glow-card {
+  position: relative;
+  border-radius: 6px;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--angle),
+    var(--color-wc-red) 0%, var(--color-wc-blue) 33%,
+    var(--color-wc-gold) 66%, var(--color-wc-red) 100%
+  );
+  animation: rotate-border 5s linear infinite;
+}
+.glow-card-inner {
+  background: var(--color-arena-card);
+  border-radius: 5px;
+  height: 100%;
+}
+
+/* ══════════════════════════════════════════════
+   MISC COMPONENTS
+══════════════════════════════════════════════ */
+.prob-bar {
+  height: 8px;
+  border-radius: 2px;
+  transition: width 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.team-select {
+  width: 100%;
+  background: var(--color-arena-elevated);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  color: var(--color-ink-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.25s;
+  appearance: none;
+}
+.team-select:focus {
+  outline: none;
+  border-color: var(--color-wc-red);
+  box-shadow: 0 0 0 3px rgba(207,10,44,0.13);
+}
+
+.shimmer-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-arena-elevated) 25%, #1a1a2e 37%, var(--color-arena-elevated) 63%
+  );
+  background-size: 400% 100%;
+  animation: var(--animate-shimmer);
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #F5CC6A 0%, #D4A843 50%, #8B6914 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.badge-gold { animation: pulse-glow 2.2s ease-in-out infinite; }
+
+/* ── Tables ── */
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+thead th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-ink-muted);
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.1s;
+}
+tbody tr:hover { background: rgba(255,255,255,0.025); }
+tbody td { padding: 0.625rem 0.75rem; }
+tbody tr:last-child { border-bottom: none; }
+
+/* ── Recharts ── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(255,255,255,0.05) !important;
+}
+.recharts-text { fill: var(--color-ink-muted) !important; font-size: 11px !important; }
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--color-arena-elevated) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 6px !important;
+}
+
+/* ── Details/summary ── */
+details > summary::-webkit-details-marker { display: none; }
+
+/* ── Scrollbar hide ── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ══════════════════════════════════════════════
+   HERO CHIPS — responsive
+══════════════════════════════════════════════ */
+.hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-top: 1.4rem;
+}
+.hero-chip-text {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.07em;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+}
+
+/* ══════════════════════════════════════════════
+   MOBILE OPTIMIZATIONS
+══════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Navbar más compacta */
+  .navbar-wc { padding: 0 0.75rem; }
+
+  /* Hero chips más compactos */
+  .hero-chips { gap: 0.75rem; margin-top: 1rem; }
+  .hero-chip-text { font-size: 0.55rem; }
+
+  /* Tabs más pequeñas y fáciles de tocar */
+  .tab-btn {
+    padding: 0.75rem 0.65rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    min-height: 44px;
+  }
+
+  /* Cards menos padding en pantallas chicas */
+  .stat-card { padding: 0.875rem; }
+
+  /* Tablas más compactas */
+  thead th {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.62rem;
+  }
+  tbody td {
+    padding: 0.5rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  /* Recharts más pequeño */
+  .recharts-text { font-size: 9px !important; }
+
+  /* Touch targets */
+  button { touch-action: manipulation; }
+}
+
+/* ── Compat aliases ── */
+:root {
+  --wc-red:        var(--color-wc-red);
+  --wc-blue:       var(--color-wc-blue);
+  --wc-gold:       var(--color-wc-gold);
+  --bg:            var(--color-arena-void);
+  --surface:       var(--color-arena-card);
+  --surface-2:     var(--color-arena-elevated);
+  --border:        rgba(207,10,44,0.18);
+  --border-subtle: rgba(255,255,255,0.06);
+  --text:          var(--color-ink-primary);
+  --text-muted:    var(--color-ink-secondary);
+}
+.hero-bg { background: var(--color-arena-void); }
