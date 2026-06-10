@@ -140,7 +140,7 @@ export default function Home() {
   }, []);
 
   const S = SHELL[lang];
-  const tabNavBg = "rgba(7,7,15,0.96)";
+  const tabNavBg = "rgba(16,22,36,0.96)";
   const mainBg   = "var(--color-arena-void)";
   const footerBg = "var(--color-arena-deep)";
 

@@ -11,14 +11,15 @@
   --color-wc-blue:         #1C3F94;
   --color-wc-cyan:         #00E5FF;
 
-  --color-arena-void:      #07070F;
-  --color-arena-deep:      #0C0C17;
-  --color-arena-card:      #111120;
-  --color-arena-elevated:  #18182A;
+  /* Azul medianoche — oscuro pero amable con la vista */
+  --color-arena-void:      #101624;
+  --color-arena-deep:      #151C2E;
+  --color-arena-card:      #1A2238;
+  --color-arena-elevated:  #232C46;
 
-  --color-ink-primary:     #F4F4FF;
-  --color-ink-secondary:   #8888AA;
-  --color-ink-muted:       #42425E;
+  --color-ink-primary:     #EDF1FA;
+  --color-ink-secondary:   #9DA8C4;
+  --color-ink-muted:       #5D6A8A;
 
   --font-display: "Bebas Neue", system-ui;
   --font-heading: "Barlow Condensed", system-ui;
@@ -71,7 +72,7 @@ body {
   display: flex;
   align-items: center;
   padding: 0 1.5rem;
-  background: rgba(7,7,15,0.95);
+  background: rgba(13,18,32,0.95);
   border-bottom: 1px solid rgba(207,10,44,0.20);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -249,7 +250,7 @@ body {
 .shimmer-skeleton {
   background: linear-gradient(
     90deg,
-    var(--color-arena-elevated) 25%, #1a1a2e 37%, var(--color-arena-elevated) 63%
+    var(--color-arena-elevated) 25%, #2A3450 37%, var(--color-arena-elevated) 63%
   );
   background-size: 400% 100%;
   animation: var(--animate-shimmer);
