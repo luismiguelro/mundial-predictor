@@ -1,18 +1,32 @@
 import type { FixedResults, GroupMatch, LiveMatch } from "@/types";
 
 /**
- * Resultados en vivo del Mundial 2026 vía openfootball (GitHub raw, sin API key).
- * Si el fetch falla, la app sigue funcionando solo con predicciones.
+ * Resultados reales del Mundial 2026.
+ * Fuente primaria: /api/live (proxy cacheado a football-data.org).
+ * Fallback: openfootball (GitHub raw, sin API key) si la API no responde
+ * o no hay token configurado. Si ambos fallan, la app sigue funcionando
+ * solo con predicciones.
  */
 
-const LIVE_URL =
+const API_URL = "/api/live";
+const OPENFOOTBALL_URL =
   "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
 
-/** openfootball usa algunos nombres distintos al dataset del modelo */
+/** Nombres de las fuentes externas → nombres del dataset del modelo */
 const NAME_MAP: Record<string, string> = {
+  // openfootball
   "Bosnia & Herzegovina": "Bosnia and Herzegovina",
   USA: "United States",
   "Curaçao": "Curacao",
+  // football-data.org
+  "Bosnia-Herzegovina": "Bosnia and Herzegovina",
+  "Korea Republic": "South Korea",
+  Czechia: "Czech Republic",
+  "Côte d'Ivoire": "Ivory Coast",
+  "Congo DR": "DR Congo",
+  "Cape Verde Islands": "Cape Verde",
+  "Cabo Verde": "Cape Verde",
+  "IR Iran": "Iran",
 };
 
 function normalizeName(raw: unknown): string {
@@ -23,9 +37,43 @@ function normalizeName(raw: unknown): string {
   return NAME_MAP[name] ?? name;
 }
 
-export async function fetchLiveMatches(): Promise<LiveMatch[]> {
+interface ApiMatch {
+  team1: string;
+  team2: string;
+  score1: number | null;
+  score2: number | null;
+  group?: string;
+  round?: string;
+  utcDate?: string | null;
+}
+
+/** Fuente primaria: football-data.org vía nuestro route handler. */
+async function fetchFromApi(): Promise<LiveMatch[] | null> {
   try {
-    const res = await fetch(LIVE_URL, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(API_URL, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const raw: ApiMatch[] = data?.matches ?? [];
+    if (raw.length === 0) return null;
+    return raw.map((m) => ({
+      team1: normalizeName(m.team1),
+      team2: normalizeName(m.team2),
+      score1: typeof m.score1 === "number" ? m.score1 : null,
+      score2: typeof m.score2 === "number" ? m.score2 : null,
+      group: m.group,
+      round: m.round,
+      // día calendario del usuario: "partidos de hoy" según su zona horaria
+      date: m.utcDate ? new Date(m.utcDate).toLocaleDateString("en-CA") : undefined,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback: dataset de openfootball en GitHub. */
+async function fetchFromOpenfootball(): Promise<LiveMatch[]> {
+  try {
+    const res = await fetch(OPENFOOTBALL_URL, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return [];
     const data = await res.json();
     const matches: unknown[] = data?.matches ?? [];
@@ -44,6 +92,10 @@ export async function fetchLiveMatches(): Promise<LiveMatch[]> {
   } catch {
     return [];
   }
+}
+
+export async function fetchLiveMatches(): Promise<LiveMatch[]> {
+  return (await fetchFromApi()) ?? (await fetchFromOpenfootball());
 }
 
 export function pairKey(t1: string, t2: string): string {
