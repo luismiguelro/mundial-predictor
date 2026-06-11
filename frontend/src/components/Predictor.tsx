@@ -106,6 +106,39 @@ interface Props {
 /* ══════════════════════════════════════════════════════
    PREDICTOR PRINCIPAL
 ══════════════════════════════════════════════════════ */
+function poissonPmf(k: number, lam: number): number {
+  let f = 1;
+  for (let i = 2; i <= k; i++) f *= i;
+  return (Math.exp(-lam) * Math.pow(lam, k)) / f;
+}
+
+/**
+ * Marcador más probable vía Poisson independiente (λ = promedio goles
+ * anotados vs recibidos), condicionado al resultado que predijo el modelo.
+ */
+function mostLikelyScore(
+  homeInfo: TeamInfo | undefined,
+  awayInfo: TeamInfo | undefined,
+  pred: Prediction
+): { s1: number; s2: number } {
+  const l1 = Math.max(0.2, ((homeInfo?.goals_scored ?? 1.3) + (awayInfo?.goals_conceded ?? 1.2)) / 2);
+  const l2 = Math.max(0.2, ((awayInfo?.goals_scored ?? 1.3) + (homeInfo?.goals_conceded ?? 1.2)) / 2);
+  const outcome =
+    pred.home_win >= pred.draw && pred.home_win >= pred.away_win ? "home"
+    : pred.away_win >= pred.draw ? "away" : "draw";
+
+  let best = { s1: 1, s2: 1, p: -1 };
+  for (let i = 0; i <= 5; i++) {
+    for (let j = 0; j <= 5; j++) {
+      const consistent = outcome === "home" ? i > j : outcome === "away" ? i < j : i === j;
+      if (!consistent) continue;
+      const p = poissonPmf(i, l1) * poissonPmf(j, l2);
+      if (p > best.p) best = { s1: i, s2: j, p };
+    }
+  }
+  return best;
+}
+
 export default function Predictor({ teams, predictions, matches }: Props) {
   const T = useLang();
   const teamList = useMemo(
@@ -261,6 +294,30 @@ export default function Predictor({ teams, predictions, matches }: Props) {
           </div>
         </div>
       </motion.div>
+
+      {/* ── Marcador más probable (Poisson) ── */}
+      <AnimatePresence>
+        {predicted && (() => {
+          const score = mostLikelyScore(homeInfo, awayInfo, pred);
+          return (
+            <motion.div
+              variants={fadeUp} initial="hidden" animate="visible" exit="exit"
+              className="rounded-2xl p-4 flex items-center gap-3 flex-wrap"
+              style={{ background: "var(--color-arena-card)", border: "1px solid rgba(255,255,255,0.07)" }}
+            >
+              <span className="text-xs uppercase tracking-widest font-mono" style={{ color: "var(--color-ink-muted)" }}>
+                {T.likelyScore}
+              </span>
+              <span className="score-final">
+                {homeInfo?.flag} {score.s1}–{score.s2} {awayInfo?.flag}
+              </span>
+              <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
+                {T.likelyScoreNote}
+              </span>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
 
       {/* ── H2H ── */}
       <AnimatePresence>

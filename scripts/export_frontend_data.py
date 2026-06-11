@@ -454,6 +454,46 @@ def main():
     else:
         print("  -> goalscorers.csv no encontrado, saltando")
 
+    # ── 9. qatar2022.json (backtest publico del modelo) ──────────────────────
+    print("Exportando qatar2022.json (backtest)...")
+    from src.model import LABEL_NAMES
+
+    df_q = df_features[df_features["year"] == 2022].copy()
+    probas_q = model.predict_proba(df_q[FEATURE_COLS])
+
+    df_scores = df_wc[df_wc["date"].dt.year == 2022][
+        ["date", "home_team", "away_team", "home_score", "away_score"]
+    ]
+    df_q = df_q.merge(df_scores, on=["date", "home_team", "away_team"], how="left")
+
+    matches_bt = []
+    hits = 0
+    for i, (_, r) in enumerate(df_q.iterrows()):
+        p_home, p_draw, p_away = (float(probas_q[i][0]), float(probas_q[i][1]), float(probas_q[i][2]))
+        predicted = LABEL_NAMES[int(probas_q[i].argmax())]
+        hit = predicted == r["outcome"]
+        hits += int(hit)
+        matches_bt.append({
+            "date": r["date"].strftime("%Y-%m-%d"),
+            "home_team": r["home_team"], "away_team": r["away_team"],
+            "home_flag": TEAM_FLAGS.get(r["home_team"], "🏳️"),
+            "away_flag": TEAM_FLAGS.get(r["away_team"], "🏳️"),
+            "home_score": int(r["home_score"]), "away_score": int(r["away_score"]),
+            "home_win": round(p_home, 4), "draw": round(p_draw, 4), "away_win": round(p_away, 4),
+            "predicted": predicted, "actual": r["outcome"], "hit": hit,
+        })
+
+    qatar_out = {
+        "n": len(matches_bt),
+        "hits": hits,
+        "accuracy": round(hits / len(matches_bt), 4) if matches_bt else 0,
+        "matches": matches_bt,
+    }
+    (OUT_DIR / "qatar2022.json").write_text(
+        json.dumps(qatar_out, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"  -> {len(matches_bt)} partidos, accuracy {qatar_out['accuracy']:.1%}")
+
     # ── Resumen ───────────────────────────────────────────────────────────
     print("\n[OK] Exportacion completa:")
     for f in sorted(OUT_DIR.glob("*.json")):

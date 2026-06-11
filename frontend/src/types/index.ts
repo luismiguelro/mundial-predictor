@@ -155,6 +155,31 @@ export interface GroupStandingEntry {
   fourth: number;
 }
 
+// ── Backtest Qatar 2022 ────────────────────────────────────────────────────────
+
+export interface BacktestMatch {
+  date: string;
+  home_team: string;
+  away_team: string;
+  home_flag: string;
+  away_flag: string;
+  home_score: number;
+  away_score: number;
+  home_win: number;
+  draw: number;
+  away_win: number;
+  predicted: string;
+  actual: string;
+  hit: boolean;
+}
+
+export interface QatarBacktest {
+  n: number;
+  hits: number;
+  accuracy: number;
+  matches: BacktestMatch[];
+}
+
 // ── Goalscorers ────────────────────────────────────────────────────────────────
 
 export interface GoalscorerVictim {

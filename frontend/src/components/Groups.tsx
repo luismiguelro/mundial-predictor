@@ -15,6 +15,27 @@ interface Props {
 
 function fmt(n: number) { return `${(n * 100).toFixed(0)}%`; }
 
+type Verdict = { hit: boolean; predicted: "t1" | "draw" | "t2"; prob: number };
+
+/** Compara el resultado más probable según el modelo con el resultado real. */
+function modelVerdict(m: GroupMatch, s: { s1: number; s2: number }): Verdict {
+  const actual = s.s1 > s.s2 ? "t1" : s.s1 < s.s2 ? "t2" : "draw";
+  const probs = { t1: m.t1_win, draw: m.draw, t2: m.t2_win } as const;
+  const predicted = (Object.entries(probs)
+    .sort((a, b) => b[1] - a[1])[0][0]) as Verdict["predicted"];
+  return { hit: predicted === actual, predicted, prob: probs[predicted] };
+}
+
+/** Orienta el marcador live al orden team1/team2 del fixture local. */
+function orientScore(
+  m: GroupMatch,
+  liveScores?: LiveScores
+): { s1: number; s2: number } | null {
+  const live = liveScores?.get(pairKey(m.team1, m.team2));
+  if (!live) return null;
+  return live.team1 === m.team1 ? { s1: live.s1, s2: live.s2 } : { s1: live.s2, s2: live.s1 };
+}
+
 function MatchCard({ match, liveScores }: { match: GroupMatch; liveScores?: LiveScores }) {
   const T = useLang();
   const { team1, team2, team1_flag, team2_flag, t1_win, draw, t2_win, date, ground } = match;
@@ -24,12 +45,11 @@ function MatchCard({ match, liveScores }: { match: GroupMatch; liveScores?: Live
   const maxP = Math.max(t1_win, t2_win);
 
   // marcador real si el partido ya se jugó (openfootball)
-  const live = liveScores?.get(pairKey(team1, team2));
-  const score = live
-    ? live.team1 === team1
-      ? { s1: live.s1, s2: live.s2 }
-      : { s1: live.s2, s2: live.s1 }
-    : null;
+  const score = orientScore(match, liveScores);
+  const verdict = score ? modelVerdict(match, score) : null;
+  const predictedLabel = verdict
+    ? verdict.predicted === "t1" ? team1 : verdict.predicted === "t2" ? team2 : T.draw
+    : "";
 
   return (
     <div className="stat-card p-4 text-left" style={score ? { borderColor: "rgba(212,168,67,0.35)" } : undefined}>
@@ -63,6 +83,18 @@ function MatchCard({ match, liveScores }: { match: GroupMatch; liveScores?: Live
         <span className="text-[var(--text-muted)]">{fmt(draw)} {T.drawAbbr}</span>
         <span style={{ color: "#6699ff" }}>{fmt(t2_win)}</span>
       </div>
+
+      {/* veredicto del modelo vs resultado real */}
+      {verdict && (
+        <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-[var(--border-subtle)]">
+          <span className={`verdict-badge ${verdict.hit ? "verdict-hit" : "verdict-miss"}`}>
+            {verdict.hit ? `✓ ${T.verdictHit}` : `✗ ${T.verdictMiss}`}
+          </span>
+          <span className="text-xs text-[var(--text-muted)]">
+            {predictedLabel} · {fmt(verdict.prob)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -125,8 +157,28 @@ export default function Groups({ groupMatches, groupStandings, liveScores }: Pro
     .sort((a, b) => a.date.localeCompare(b.date));
   const standings = groupStandings[selected] ?? [];
 
+  // récord global del modelo sobre los partidos ya jugados
+  let played = 0, hits = 0;
+  for (const m of Object.values(groupMatches).flat()) {
+    const score = orientScore(m, liveScores);
+    if (!score) continue;
+    played++;
+    if (modelVerdict(m, score).hit) hits++;
+  }
+
   return (
     <div className="space-y-6">
+      {played > 0 && (
+        <div className="flex items-center gap-2 text-sm rounded-md px-3 py-2 stat-card !p-3">
+          <span className="live-dot" />
+          <span className="font-bold">{T.modelRecord}:</span>
+          <span className="tabular-nums font-bold" style={{ color: "var(--wc-gold)" }}>
+            {hits}/{played} ({played ? Math.round((hits / played) * 100) : 0}%)
+          </span>
+          <span className="text-xs text-[var(--text-muted)]">· {T.modelRecordNote}</span>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {groups.map((g) => (
           <button

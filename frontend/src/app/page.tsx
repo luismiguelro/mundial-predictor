@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type {
   TeamInfo, Prediction, HistoricalMatch, SiteStats,
-  Goalscorer, GroupMatch, GroupStandingEntry, LiveMatch,
+  Goalscorer, GroupMatch, GroupStandingEntry, LiveMatch, QatarBacktest,
 } from "@/types";
 import { LangContext, type Lang } from "@/lib/i18n";
 import { buildFixedResults, buildScoreMap, fetchLiveMatches } from "@/lib/live";
@@ -102,6 +102,7 @@ export default function Home() {
   const [groupMatches,   setGroupMatches]   = useState<Record<string, GroupMatch[]> | null>(null);
   const [groupStandings, setGroupStandings] = useState<Record<string, GroupStandingEntry[]> | null>(null);
   const [liveMatches,    setLiveMatches]    = useState<LiveMatch[]>([]);
+  const [qatar,          setQatar]          = useState<QatarBacktest | null>(null);
   const [loading,        setLoading]        = useState(true);
 
   /* Resultados reales del torneo (openfootball) — no bloquea la carga inicial */
@@ -132,9 +133,11 @@ export default function Home() {
       fetch("/data/goalscorers.json").then((r) => r.json()),
       fetch("/data/group_matches.json").then((r) => r.json()),
       fetch("/data/group_standings.json").then((r) => r.json()),
-    ]).then(([t, p, g, m, s, gs, gm, gst]) => {
+      fetch("/data/qatar2022.json").then((r) => r.json()).catch(() => null),
+    ]).then(([t, p, g, m, s, gs, gm, gst, q]) => {
       setTeams(t); setPredictions(p); setGroups(g); setMatches(m);
       setStats(s); setGoalscorers(gs); setGroupMatches(gm); setGroupStandings(gst);
+      setQatar(q);
       setLoading(false);
     });
   }, []);
@@ -282,7 +285,7 @@ export default function Home() {
               )}
               {tab === "curiosidades" && stats && (
                 <TabPane key="curiosidades">
-                  <FunFacts stats={stats} goalscorers={goalscorers} />
+                  <FunFacts stats={stats} goalscorers={goalscorers} qatar={qatar} />
                 </TabPane>
               )}
               {tab === "glosario" && (

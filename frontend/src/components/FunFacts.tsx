@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { SiteStats, Goalscorer, GoalscorerVictim } from "@/types";
+import type { SiteStats, Goalscorer, GoalscorerVictim, QatarBacktest } from "@/types";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, ReferenceLine, Cell,
@@ -12,9 +12,10 @@ import { useLang } from "@/lib/i18n";
 interface Props {
   stats: SiteStats;
   goalscorers: Goalscorer[];
+  qatar?: QatarBacktest | null;
 }
 
-export default function FunFacts({ stats, goalscorers }: Props) {
+export default function FunFacts({ stats, goalscorers, qatar }: Props) {
   const T = useLang();
   const {
     total_matches, total_goals, avg_goals_all, n_editions,
@@ -185,6 +186,68 @@ export default function FunFacts({ stats, goalscorers }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* ── Backtest Qatar 2022 ── */}
+      {qatar && qatar.matches.length > 0 && <QatarSection qatar={qatar} />}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   BACKTEST QATAR 2022 — qué predijo el modelo en el test
+══════════════════════════════════════════════════════ */
+function QatarSection({ qatar }: { qatar: QatarBacktest }) {
+  const T = useLang();
+  const [showAll, setShowAll] = useState(false);
+  const rows = showAll ? qatar.matches : qatar.matches.slice(0, 10);
+
+  return (
+    <div>
+      <h3 className="text-sm font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">
+        {T.backtestTitle}
+      </h3>
+      <p className="text-xs text-[var(--text-muted)] mb-4 max-w-2xl">{T.backtestDesc}</p>
+
+      <div className="stat-card !p-3 mb-4 flex items-center gap-3 flex-wrap">
+        <span className="text-3xl font-black tabular-nums" style={{ color: "var(--wc-gold)" }}>
+          {(qatar.accuracy * 100).toFixed(0)}%
+        </span>
+        <span className="text-sm font-bold">{qatar.hits}/{qatar.n} {T.backtestHits}</span>
+        <span className="text-xs text-[var(--text-muted)]">· {T.backtestBaseline}</span>
+      </div>
+
+      <div className="space-y-1.5">
+        {rows.map((m) => {
+          const predLabel =
+            m.predicted === "home_win" ? m.home_team :
+            m.predicted === "away_win" ? m.away_team : T.draw;
+          const predProb =
+            m.predicted === "home_win" ? m.home_win :
+            m.predicted === "away_win" ? m.away_win : m.draw;
+          return (
+            <div key={`${m.date}|${m.home_team}|${m.away_team}`}
+              className="stat-card !p-2.5 flex items-center gap-2 flex-wrap text-sm">
+              <span className="text-xs text-[var(--text-muted)] tabular-nums w-16 shrink-0">
+                {m.date.slice(5)}
+              </span>
+              <span className="flex-1 min-w-[180px]">
+                {m.home_flag} {m.home_team} <strong className="tabular-nums">{m.home_score}–{m.away_score}</strong> {m.away_team} {m.away_flag}
+              </span>
+              <span className="text-xs text-[var(--text-muted)]">
+                {predLabel} · {(predProb * 100).toFixed(0)}%
+              </span>
+              <span className={`verdict-badge ${m.hit ? "verdict-hit" : "verdict-miss"}`}>
+                {m.hit ? "✓" : "✗"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <button onClick={() => setShowAll(!showAll)}
+        className="mt-3 text-xs font-bold uppercase tracking-widest text-[var(--wc-gold)] hover:opacity-80 transition-opacity">
+        {showAll ? T.backtestLess : `${T.backtestMore} (${qatar.n})`}
+      </button>
     </div>
   );
 }
