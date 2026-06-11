@@ -12,6 +12,9 @@ export function useLang() {
 export const UI = {
   es: {
     /* Predictor */
+    locale:          "es-CO",
+    todayTitle:      "Partidos de hoy",
+    nextMatchesTitle: "Próxima jornada",
     matchPredictor:  "Predictor de partido",
     home:            "Local",
     away:            "Visitante",
@@ -158,6 +161,9 @@ export const UI = {
   },
 
   en: {
+    locale:          "en-US",
+    todayTitle:      "Today's matches",
+    nextMatchesTitle: "Next matchday",
     matchPredictor:  "Match Predictor",
     home:            "Home",
     away:            "Away",
@@ -295,6 +301,9 @@ export const UI = {
   },
 
   pt: {
+    locale:          "pt-BR",
+    todayTitle:      "Jogos de hoje",
+    nextMatchesTitle: "Próxima rodada",
     matchPredictor:  "Preditor de jogo",
     home:            "Mandante",
     away:            "Visitante",

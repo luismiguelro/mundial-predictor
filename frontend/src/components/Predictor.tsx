@@ -6,10 +6,11 @@ import {
   RadialBarChart, RadialBar, PolarAngleAxis,
   ResponsiveContainer, Tooltip,
 } from "recharts";
-import type { TeamInfo, Prediction, HistoricalMatch } from "@/types";
+import type { TeamInfo, Prediction, HistoricalMatch, LiveMatch } from "@/types";
 import VsOrb from "@/components/ui/VsOrb";
 import ProbBar from "@/components/ui/ProbBar";
 import { staggerContainer, fadeUp, popIn } from "@/lib/animations";
+import { fixturesOfTheDay } from "@/lib/live";
 import { useLang } from "@/lib/i18n";
 
 const TEAM_COLORS: Record<string, string> = {
@@ -101,6 +102,7 @@ interface Props {
   teams: Record<string, TeamInfo>;
   predictions: Record<string, Prediction>;
   matches: HistoricalMatch[];
+  liveMatches?: LiveMatch[];
 }
 
 /* ══════════════════════════════════════════════════════
@@ -139,7 +141,7 @@ function mostLikelyScore(
   return best;
 }
 
-export default function Predictor({ teams, predictions, matches }: Props) {
+export default function Predictor({ teams, predictions, matches, liveMatches }: Props) {
   const T = useLang();
   const teamList = useMemo(
     () => Object.entries(teams).sort((a, b) => a[0].localeCompare(b[0])),
@@ -150,6 +152,24 @@ export default function Predictor({ teams, predictions, matches }: Props) {
   const [away, setAway]           = useState("Portugal");
   const [predicted, setPredicted] = useState(false);
   const [loading, setLoading]     = useState(false);
+
+  /* Partidos del día (fecha local). Solo fixtures con ambos equipos
+     definidos en el modelo — descarta placeholders del knockout. */
+  const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+  const day = useMemo(() => {
+    const { date, fixtures } = fixturesOfTheDay(liveMatches ?? [], todayStr);
+    return { date, fixtures: fixtures.filter((f) => teams[f.team1] && teams[f.team2]) };
+  }, [liveMatches, teams, todayStr]);
+
+  /* Carga por defecto el primer partido pendiente del día: solo queda dar Predecir */
+  const autoloaded = useRef(false);
+  useEffect(() => {
+    if (autoloaded.current || day.fixtures.length === 0) return;
+    autoloaded.current = true;
+    const next = day.fixtures.find((f) => f.score1 === null) ?? day.fixtures[0];
+    setHome(next.team1);
+    setAway(next.team2);
+  }, [day]);
 
   const homeInfo  = teams[home];
   const awayInfo  = teams[away];
@@ -195,6 +215,62 @@ export default function Predictor({ teams, predictions, matches }: Props) {
 
   return (
     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-5">
+      {/* ── Partidos del día: clic para cargarlos en el predictor ── */}
+      {day.fixtures.length > 0 && (
+        <motion.div
+          variants={fadeUp}
+          className="rounded-2xl p-4"
+          style={{ background: "var(--color-arena-card)", border: "1px solid rgba(255,255,255,0.07)" }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <span className="live-dot" />
+            <span
+              className="text-[10px] uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-mono)", color: "var(--color-ink-secondary)" }}
+            >
+              {day.date === todayStr ? T.todayTitle : T.nextMatchesTitle} ·{" "}
+              {new Date(day.date + "T12:00:00").toLocaleDateString(T.locale, {
+                weekday: "short", day: "numeric", month: "short",
+              })}
+            </span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {day.fixtures.map((f) => {
+              const isSel =
+                (home === f.team1 && away === f.team2) ||
+                (home === f.team2 && away === f.team1);
+              const done = f.score1 !== null && f.score2 !== null;
+              return (
+                <button
+                  key={`${f.team1}|${f.team2}`}
+                  onClick={() => { setHome(f.team1); setAway(f.team2); setPredicted(false); }}
+                  className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all"
+                  style={{
+                    background: isSel ? "rgba(212,168,67,0.12)" : "var(--color-arena-elevated)",
+                    border: `1px solid ${isSel ? "rgba(212,168,67,0.45)" : "rgba(255,255,255,0.07)"}`,
+                    color: "var(--color-ink-primary)",
+                    fontFamily: "var(--font-body)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>{teams[f.team1]?.flag} {f.team1}</span>
+                  <span
+                    className="tabular-nums"
+                    style={{
+                      fontFamily: "var(--font-mono)", fontSize: "0.7rem",
+                      color: done ? "var(--color-wc-gold)" : "var(--color-ink-muted)",
+                    }}
+                  >
+                    {done ? `${f.score1}–${f.score2}` : "vs"}
+                  </span>
+                  <span>{f.team2} {teams[f.team2]?.flag}</span>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
       {/* ── Tarjeta principal ── */}
       <motion.div variants={fadeUp} className="relative">
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none" aria-hidden>

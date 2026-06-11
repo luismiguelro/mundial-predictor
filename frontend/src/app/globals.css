@@ -113,6 +113,14 @@ body {
   border-color: rgba(207,10,44,0.4);
   color: var(--color-wc-red);
 }
+.status-chip--gold {
+  background: rgba(212,168,67,0.08);
+  border-color: rgba(212,168,67,0.4);
+  color: var(--color-wc-gold);
+}
+.status-chip--gold strong {
+  color: var(--color-wc-gold);
+}
 
 /* ══════════════════════════════════════════════
    ACCENT BAR — tricolor de los 3 anfitriones

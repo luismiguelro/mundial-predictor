@@ -7,7 +7,10 @@ import type {
   Goalscorer, GroupMatch, GroupStandingEntry, LiveMatch, QatarBacktest,
 } from "@/types";
 import { LangContext, type Lang } from "@/lib/i18n";
-import { buildFixedResults, buildScoreMap, fetchLiveMatches } from "@/lib/live";
+import {
+  buildFixedResults, buildLiveStats, buildScoreMap,
+  fetchLiveMatches, modelRecord, type LiveStats,
+} from "@/lib/live";
 import Predictor    from "@/components/Predictor";
 import SimulatorTab from "@/components/Simulator";
 import FunFacts     from "@/components/FunFacts";
@@ -37,7 +40,12 @@ const SHELL = {
     footerNote: "Modelo entrenado hasta Qatar 2022 · No afiliado a FIFA",
     kickoffIn:  "El torneo arranca en",
     liveNow:    "Torneo en vivo",
-    played:     "partidos jugados",
+    played:     "partidos",
+    goalsLabel: "goles",
+    perMatch:   "/partido",
+    modelTag:   "Modelo",
+    hitsLabel:  "aciertos",
+    lastLabel:  "Último",
     daysSuffix: "d",
   },
   en: {
@@ -58,7 +66,12 @@ const SHELL = {
     footerNote: "Model trained up to Qatar 2022 · Not affiliated with FIFA",
     kickoffIn:  "Tournament kicks off in",
     liveNow:    "Tournament live",
-    played:     "matches played",
+    played:     "matches",
+    goalsLabel: "goals",
+    perMatch:   "/match",
+    modelTag:   "Model",
+    hitsLabel:  "correct",
+    lastLabel:  "Latest",
     daysSuffix: "d",
   },
   pt: {
@@ -79,7 +92,12 @@ const SHELL = {
     footerNote: "Modelo treinado até o Qatar 2022 · Não afiliado à FIFA",
     kickoffIn:  "O torneio começa em",
     liveNow:    "Torneio ao vivo",
-    played:     "jogos disputados",
+    played:     "jogos",
+    goalsLabel: "gols",
+    perMatch:   "/jogo",
+    modelTag:   "Modelo",
+    hitsLabel:  "acertos",
+    lastLabel:  "Último",
     daysSuffix: "d",
   },
 } as const;
@@ -105,13 +123,21 @@ export default function Home() {
   const [qatar,          setQatar]          = useState<QatarBacktest | null>(null);
   const [loading,        setLoading]        = useState(true);
 
-  /* Resultados reales del torneo (openfootball) — no bloquea la carga inicial */
+  /* Resultados reales del torneo (openfootball) — no bloquea la carga inicial.
+     Se refresca cada 5 min para captar partidos que terminan con la pestaña abierta. */
   useEffect(() => {
     fetchLiveMatches().then(setLiveMatches);
+    const id = setInterval(() => fetchLiveMatches().then(setLiveMatches), 5 * 60_000);
+    return () => clearInterval(id);
   }, []);
 
   const fixedResults = useMemo(() => buildFixedResults(liveMatches), [liveMatches]);
   const liveScores   = useMemo(() => buildScoreMap(liveMatches), [liveMatches]);
+  const liveStats    = useMemo(() => buildLiveStats(liveMatches), [liveMatches]);
+  const record       = useMemo(
+    () => (groupMatches ? modelRecord(groupMatches, liveScores) : { played: 0, hits: 0 }),
+    [groupMatches, liveScores]
+  );
 
   /* Persistencia */
   useEffect(() => {
@@ -216,11 +242,7 @@ export default function Home() {
               <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", letterSpacing: "0.2em", color: "var(--color-ink-secondary)", textTransform: "uppercase" }}>
                 {S.eyebrow}
               </span>
-              <TournamentStatus
-                kickoffIn={S.kickoffIn} liveNow={S.liveNow}
-                played={S.played} daysSuffix={S.daysSuffix}
-                playedCount={fixedResults.size}
-              />
+              <TournamentStatus S={S} stats={liveStats} record={record} teams={teams} />
             </motion.div>
 
             {/* H1 */}
@@ -265,7 +287,7 @@ export default function Home() {
             <AnimatePresence mode="wait">
               {tab === "predictor" && teams && predictions && (
                 <TabPane key="predictor">
-                  <Predictor teams={teams} predictions={predictions} matches={matches} />
+                  <Predictor teams={teams} predictions={predictions} matches={matches} liveMatches={liveMatches} />
                 </TabPane>
               )}
               {tab === "grupos" && groupMatches && groupStandings && (
@@ -335,11 +357,16 @@ export default function Home() {
   );
 }
 
-/* ── Estado del torneo: countdown antes del 11/06, badge EN VIVO después ── */
-const KICKOFF_UTC = Date.parse("2026-06-12T01:00:00Z"); // México vs ? · Estadio Azteca · 19:00 CDMX
+/* ── Estado del torneo: countdown antes del kickoff, stats en vivo después ── */
+const KICKOFF_UTC = Date.parse("2026-06-11T19:00:00Z"); // México vs Sudáfrica · Estadio Azteca · 13:00 CDMX
 
-function TournamentStatus({ kickoffIn, liveNow, played, daysSuffix, playedCount }: {
-  kickoffIn: string; liveNow: string; played: string; daysSuffix: string; playedCount: number;
+type ShellStrings = (typeof SHELL)[Lang];
+
+function TournamentStatus({ S, stats, record, teams }: {
+  S: ShellStrings;
+  stats: LiveStats;
+  record: { played: number; hits: number };
+  teams: Record<string, TeamInfo> | null;
 }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -351,28 +378,48 @@ function TournamentStatus({ kickoffIn, liveNow, played, daysSuffix, playedCount 
   if (now === null) return null; // evita mismatch SSR/cliente
 
   const diff = KICKOFF_UTC - now;
-  const isLive = diff <= 0;
 
-  if (isLive) {
+  if (diff > 0) {
+    const d = Math.floor(diff / 86_400_000);
+    const h = Math.floor((diff % 86_400_000) / 3_600_000);
+    const m = Math.floor((diff % 3_600_000) / 60_000);
+    const s = Math.floor((diff % 60_000) / 1_000);
+    const pad = (x: number) => String(x).padStart(2, "0");
     return (
-      <span className="status-chip status-chip--live">
-        <span className="live-dot" />
-        {liveNow}{playedCount > 0 ? ` · ${playedCount} ${played}` : ""}
+      <span className="status-chip">
+        {S.kickoffIn}
+        <strong>{d}{S.daysSuffix} {pad(h)}:{pad(m)}:{pad(s)}</strong>
       </span>
     );
   }
 
-  const d = Math.floor(diff / 86_400_000);
-  const h = Math.floor((diff % 86_400_000) / 3_600_000);
-  const m = Math.floor((diff % 3_600_000) / 60_000);
-  const s = Math.floor((diff % 60_000) / 1_000);
-  const pad = (x: number) => String(x).padStart(2, "0");
+  /* Torneo en curso: chips con data real (openfootball, se actualiza al cerrar cada partido) */
+  const flag = (name: string) => teams?.[name]?.flag ?? "";
+  const { last } = stats;
+  const pct = record.played ? Math.round((record.hits / record.played) * 100) : 0;
 
   return (
-    <span className="status-chip">
-      {kickoffIn}
-      <strong>{d}{daysSuffix} {pad(h)}:{pad(m)}:{pad(s)}</strong>
-    </span>
+    <>
+      <span className="status-chip status-chip--live">
+        <span className="live-dot" />
+        {S.liveNow}
+      </span>
+      {stats.played > 0 && (
+        <span className="status-chip">
+          <strong>{stats.played}</strong> {S.played} · <strong>{stats.goals}</strong> {S.goalsLabel} · <strong>{stats.avg.toFixed(1)}</strong>{S.perMatch}
+        </span>
+      )}
+      {record.played > 0 && (
+        <span className="status-chip status-chip--gold">
+          {S.modelTag} <strong>{record.hits}/{record.played}</strong> {S.hitsLabel} ({pct}%)
+        </span>
+      )}
+      {last && last.score1 !== null && last.score2 !== null && (
+        <span className="status-chip">
+          {S.lastLabel}: <strong>{flag(last.team1)} {last.team1} {last.score1}–{last.score2} {last.team2} {flag(last.team2)}</strong>
+        </span>
+      )}
+    </>
   );
 }
 

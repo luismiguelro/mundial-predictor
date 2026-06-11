@@ -3,40 +3,17 @@
 import { useState } from "react";
 import type { GroupMatch, GroupStandingEntry } from "@/types";
 import { useLang } from "@/lib/i18n";
-import { pairKey } from "@/lib/live";
-
-type LiveScores = Map<string, { s1: number; s2: number; team1: string }>;
+import { modelRecord, modelVerdict, orientScore, type ScoreMap } from "@/lib/live";
 
 interface Props {
   groupMatches: Record<string, GroupMatch[]>;
   groupStandings: Record<string, GroupStandingEntry[]>;
-  liveScores?: LiveScores;
+  liveScores?: ScoreMap;
 }
 
 function fmt(n: number) { return `${(n * 100).toFixed(0)}%`; }
 
-type Verdict = { hit: boolean; predicted: "t1" | "draw" | "t2"; prob: number };
-
-/** Compara el resultado más probable según el modelo con el resultado real. */
-function modelVerdict(m: GroupMatch, s: { s1: number; s2: number }): Verdict {
-  const actual = s.s1 > s.s2 ? "t1" : s.s1 < s.s2 ? "t2" : "draw";
-  const probs = { t1: m.t1_win, draw: m.draw, t2: m.t2_win } as const;
-  const predicted = (Object.entries(probs)
-    .sort((a, b) => b[1] - a[1])[0][0]) as Verdict["predicted"];
-  return { hit: predicted === actual, predicted, prob: probs[predicted] };
-}
-
-/** Orienta el marcador live al orden team1/team2 del fixture local. */
-function orientScore(
-  m: GroupMatch,
-  liveScores?: LiveScores
-): { s1: number; s2: number } | null {
-  const live = liveScores?.get(pairKey(m.team1, m.team2));
-  if (!live) return null;
-  return live.team1 === m.team1 ? { s1: live.s1, s2: live.s2 } : { s1: live.s2, s2: live.s1 };
-}
-
-function MatchCard({ match, liveScores }: { match: GroupMatch; liveScores?: LiveScores }) {
+function MatchCard({ match, liveScores }: { match: GroupMatch; liveScores?: ScoreMap }) {
   const T = useLang();
   const { team1, team2, team1_flag, team2_flag, t1_win, draw, t2_win, date, ground } = match;
   const d = new Date(date + "T12:00:00");
@@ -158,13 +135,7 @@ export default function Groups({ groupMatches, groupStandings, liveScores }: Pro
   const standings = groupStandings[selected] ?? [];
 
   // récord global del modelo sobre los partidos ya jugados
-  let played = 0, hits = 0;
-  for (const m of Object.values(groupMatches).flat()) {
-    const score = orientScore(m, liveScores);
-    if (!score) continue;
-    played++;
-    if (modelVerdict(m, score).hit) hits++;
-  }
+  const { played, hits } = modelRecord(groupMatches, liveScores ?? new Map());
 
   return (
     <div className="space-y-6">
