@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import type { TeamInfo, Prediction, LiveMatch } from "@/types";
 import type { LiveStats, MatchVerdict } from "@/lib/live";
@@ -17,6 +17,8 @@ interface Props {
   verdicts: MatchVerdict[];
 }
 
+const MVR_PREVIEW = 6; // tarjetas visibles antes de "Ver todos"
+
 function fmtPct(n: number) { return `${(n * 100).toFixed(0)}%`; }
 
 /* ══════════════════════════════════════════════════════
@@ -26,6 +28,7 @@ export default function LiveTournament({
   teams, predictions, groups, liveMatches, stats, verdicts,
 }: Props) {
   const T = useLang();
+  const [showAll, setShowAll] = useState(false);
   const flag = (name: string) => teams[name]?.flag ?? "";
 
   const ROUND_LABEL: Record<string, string> = {
@@ -49,6 +52,7 @@ export default function LiveTournament({
     () => [...verdicts].sort((a, b) => (b.m.date ?? "").localeCompare(a.m.date ?? "")),
     [verdicts]
   );
+  const visible = showAll ? recent : recent.slice(0, MVR_PREVIEW);
   const hits = verdicts.filter((v) => v.hit).length;
   const pct = verdicts.length ? Math.round((hits / verdicts.length) * 100) : 0;
 
@@ -94,146 +98,171 @@ export default function LiveTournament({
     utc ? new Date(utc).toLocaleTimeString(T.locale, { hour: "2-digit", minute: "2-digit" }) : "";
 
   return (
-    <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-6">
+    <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-7">
 
       {/* ── KPIs del torneo ── */}
-      <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <motion.div variants={fadeUp} className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         <Kpi label={T.lt_played}   value={String(stats.played)} />
         <Kpi label={T.lt_goals}    value={String(stats.goals)} />
         <Kpi label={T.lt_avgGoals} value={stats.played ? stats.avg.toFixed(2) : "—"} />
         <Kpi
           label={T.modelRecord}
-          value={verdicts.length ? `${hits}/${verdicts.length}` : "—"}
-          sub={verdicts.length ? `${pct}%` : undefined}
+          value={verdicts.length ? `${pct}%` : "—"}
+          sub={verdicts.length ? `${hits}/${verdicts.length}` : undefined}
           gold
         />
       </motion.div>
 
       {/* ── En juego ahora ── */}
       {inPlay.length > 0 && (
-        <motion.div variants={fadeUp} className="space-y-2">
+        <motion.section variants={fadeUp} className="space-y-3">
           <SectionTitle dot title={T.lt_inPlay} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {inPlay.map((m) => (
               <div
                 key={`${m.team1}|${m.team2}`}
-                className="stat-card !p-4 flex items-center justify-between gap-3"
+                className="stat-card !p-4 text-center"
                 style={{ borderColor: "rgba(207,10,44,0.45)" }}
               >
-                <span className="text-sm font-bold">{flag(m.team1)} {m.team1}</span>
-                <span className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center justify-center gap-2 mb-2.5">
                   <span className="live-dot" />
                   <span
-                    className="text-[10px] uppercase tracking-widest"
+                    className="text-[10px] uppercase tracking-[0.18em]"
                     style={{ fontFamily: "var(--font-mono)", color: "var(--wc-red)" }}
                   >
                     {stageLabel(m)}
                   </span>
-                </span>
-                <span className="text-sm font-bold text-right">{m.team2} {flag(m.team2)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 min-w-0 text-right text-sm font-bold truncate">
+                    {flag(m.team1)} {m.team1}
+                  </span>
+                  <span className="text-xs shrink-0 px-1" style={{ color: "var(--text-muted)" }}>vs</span>
+                  <span className="flex-1 min-w-0 text-left text-sm font-bold truncate">
+                    {m.team2} {flag(m.team2)}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
-        </motion.div>
+        </motion.section>
       )}
 
       {/* ── Modelo vs Realidad ── */}
-      <motion.div variants={fadeUp} className="stat-card text-left">
-        <div className="flex items-baseline gap-2 flex-wrap mb-1">
-          <h3 className="font-bold text-base" style={{ fontFamily: "var(--font-heading)" }}>
-            {T.lt_mvrTitle}
-          </h3>
-          <span className="text-xs text-[var(--text-muted)]">· {T.lt_mvrNote}</span>
-        </div>
+      <motion.section variants={fadeUp} className="space-y-3">
+        <SectionTitle title={T.lt_mvrTitle} note={T.lt_mvrNote} />
 
         {recent.length === 0 ? (
-          <div className="flex items-center gap-3 py-6">
+          <div className="stat-card !p-5 flex items-center gap-3">
             <span className="live-dot shrink-0" />
-            <p className="text-sm text-[var(--text-muted)]">{T.lt_empty}</p>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>{T.lt_empty}</p>
           </div>
         ) : (
-          <div className="mt-3">
-            {recent.map((v) => {
-              const { m } = v;
-              const pickLabel =
-                v.predicted === "t1" ? m.team1 : v.predicted === "t2" ? m.team2 : T.draw;
-              return (
-                <div
-                  key={`${m.team1}|${m.team2}|${m.date}`}
-                  className="flex items-center gap-x-3 gap-y-1 py-2.5 flex-wrap border-b border-[var(--border-subtle)] last:border-b-0"
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {visible.map((v) => {
+                const { m } = v;
+                const pickLabel =
+                  v.predicted === "t1" ? m.team1 : v.predicted === "t2" ? m.team2 : T.draw;
+                return (
+                  <div key={`${m.team1}|${m.team2}|${m.date}`} className="stat-card !p-4 text-left">
+                    {/* fecha + fase + veredicto */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span
+                        className="text-[10px] uppercase tracking-wider truncate"
+                        style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                      >
+                        {m.date ? fmtDate(m.date) : ""} · {stageLabel(m)}
+                      </span>
+                      <span className={`verdict-badge ${v.hit ? "verdict-hit" : "verdict-miss"}`}>
+                        {v.hit ? `✓ ${T.verdictHit}` : `✗ ${T.verdictMiss}`}
+                      </span>
+                    </div>
+
+                    {/* equipos + marcador oficial */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="flex-1 min-w-0 text-right text-sm font-bold truncate">
+                        {flag(m.team1)} {m.team1}
+                      </span>
+                      <span className="score-final shrink-0 px-1">{m.score1}–{m.score2}</span>
+                      <span className="flex-1 min-w-0 text-sm font-bold truncate">
+                        {m.team2} {flag(m.team2)}
+                      </span>
+                    </div>
+
+                    {/* lo que dijo el modelo */}
+                    <div className="flex h-2 rounded-full overflow-hidden mb-1.5">
+                      <div style={{ width: `${v.probs.t1 * 100}%`, background: "#c8102e" }} />
+                      <div style={{ width: `${v.probs.draw * 100}%`, background: "rgba(255,255,255,0.15)" }} />
+                      <div style={{ width: `${v.probs.t2 * 100}%`, background: "#003087" }} />
+                    </div>
+                    <p className="text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
+                      {T.lt_forecast}: <span className="font-bold" style={{ color: "var(--text)" }}>{pickLabel}</span> · {fmtPct(v.prob)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {recent.length > MVR_PREVIEW && (
+              <div className="text-center">
+                <button
+                  onClick={() => setShowAll(!showAll)}
+                  className="text-xs px-4 py-2 rounded-lg font-semibold transition-all bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--text)]"
                 >
-                  <span
-                    className="text-[10px] uppercase w-20 shrink-0"
-                    style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
-                  >
-                    {m.date ? fmtDate(m.date) : ""}
-                  </span>
-                  <span
-                    className="text-[10px] uppercase w-16 shrink-0 hidden sm:block"
-                    style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
-                  >
-                    {stageLabel(m)}
-                  </span>
-                  <span className="flex-1 min-w-[7rem] text-right text-sm font-bold truncate">
-                    {flag(m.team1)} {m.team1}
-                  </span>
-                  <span className="score-final shrink-0 px-1">{m.score1}–{m.score2}</span>
-                  <span className="flex-1 min-w-[7rem] text-sm font-bold truncate">
-                    {m.team2} {flag(m.team2)}
-                  </span>
-                  {/* mini barra de probabilidades del modelo */}
-                  <span className="hidden md:flex h-1.5 w-20 rounded-full overflow-hidden shrink-0">
-                    <span style={{ width: `${v.probs.t1 * 100}%`, background: "#c8102e" }} />
-                    <span style={{ width: `${v.probs.draw * 100}%`, background: "rgba(255,255,255,0.15)" }} />
-                    <span style={{ width: `${v.probs.t2 * 100}%`, background: "#003087" }} />
-                  </span>
-                  <span className="text-xs text-[var(--text-muted)] shrink-0 tabular-nums">
-                    {pickLabel} · {fmtPct(v.prob)}
-                  </span>
-                  <span className={`verdict-badge shrink-0 ${v.hit ? "verdict-hit" : "verdict-miss"}`}>
-                    {v.hit ? `✓ ${T.verdictHit}` : `✗ ${T.verdictMiss}`}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                  {showAll ? T.backtestLess : `${T.backtestMore} (${recent.length})`}
+                </button>
+              </div>
+            )}
+          </>
         )}
-      </motion.div>
+      </motion.section>
 
       {/* ── Posiciones oficiales ── */}
       {standings.length > 0 && (
-        <motion.div variants={fadeUp} className="space-y-2">
+        <motion.section variants={fadeUp} className="space-y-3">
           <SectionTitle title={T.lt_standings} note={T.lt_standingsNote} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {standings.map(([g, rows]) => (
-              <div key={g} className="stat-card !p-3 text-left">
-                <div className="flex items-baseline justify-between mb-2">
+              <div key={g} className="stat-card !p-4 text-left">
+                {/* encabezado alineado con las columnas numéricas */}
+                <div className="grid grid-cols-[1fr_1.8rem_2.4rem_1.9rem] gap-x-1.5 items-baseline mb-2 pb-2 border-b border-[var(--border-subtle)]">
                   <span className="text-xs font-black" style={{ color: "var(--wc-red)" }}>
                     {T.group} {g}
                   </span>
-                  <span
-                    className="text-[9px] uppercase tracking-wider tabular-nums"
-                    style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
-                  >
-                    {T.lt_playedHead} · {T.lt_gdHead} · {T.lt_ptsHead}
-                  </span>
+                  {[T.lt_playedHead, T.lt_gdHead, T.lt_ptsHead].map((h) => (
+                    <span
+                      key={h}
+                      className="text-[9px] uppercase tracking-wider text-right"
+                      style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                    >
+                      {h}
+                    </span>
+                  ))}
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {rows.map((r, i) => (
-                    <div key={r.team} className="flex items-center gap-2 text-xs">
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{
-                          background:
-                            i < 2 ? "#22c55e" : i === 2 ? "#f59e0b88" : "rgba(255,255,255,0.10)",
-                        }}
-                      />
-                      <span className="flex-1 truncate">{flag(r.team)} {r.team}</span>
-                      <span className="tabular-nums text-[var(--text-muted)] w-5 text-right">{r.played}</span>
-                      <span className="tabular-nums text-[var(--text-muted)] w-7 text-right">
+                    <div
+                      key={r.team}
+                      className="grid grid-cols-[1fr_1.8rem_2.4rem_1.9rem] gap-x-1.5 items-center text-xs"
+                    >
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{
+                            background:
+                              i < 2 ? "#22c55e" : i === 2 ? "#f59e0b88" : "rgba(255,255,255,0.10)",
+                          }}
+                        />
+                        <span className="truncate">{flag(r.team)} {r.team}</span>
+                      </span>
+                      <span className="tabular-nums text-right" style={{ color: "var(--text-muted)" }}>
+                        {r.played}
+                      </span>
+                      <span className="tabular-nums text-right" style={{ color: "var(--text-muted)" }}>
                         {r.gd > 0 ? `+${r.gd}` : r.gd}
                       </span>
-                      <span className="tabular-nums font-bold w-6 text-right" style={{ color: "var(--wc-gold)" }}>
+                      <span className="tabular-nums font-bold text-right" style={{ color: "var(--wc-gold)" }}>
                         {r.points}
                       </span>
                     </div>
@@ -242,48 +271,58 @@ export default function LiveTournament({
               </div>
             ))}
           </div>
-        </motion.div>
+        </motion.section>
       )}
 
       {/* ── Próximos partidos ── */}
       {upcoming.length > 0 && (
-        <motion.div variants={fadeUp} className="space-y-2">
+        <motion.section variants={fadeUp} className="space-y-3">
           <SectionTitle title={T.lt_upcoming} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
             {upcoming.map(({ date, fixtures }) => (
               <div key={date} className="stat-card !p-4 text-left">
                 <p
-                  className="text-[10px] uppercase tracking-widest mb-3"
-                  style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                  className="text-[10px] uppercase tracking-[0.18em] mb-1"
+                  style={{ fontFamily: "var(--font-mono)", color: "var(--wc-gold)" }}
                 >
                   {fmtDate(date)}
                 </p>
-                <div className="space-y-2">
+                <div className="divide-y divide-[var(--border-subtle)]">
                   {fixtures.map((m) => {
                     const f = forecast(m);
                     return (
-                      <div key={`${m.team1}|${m.team2}`} className="flex items-center gap-2 text-sm flex-wrap">
-                        <span
-                          className="text-[10px] tabular-nums w-11 shrink-0"
-                          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
-                        >
-                          {fmtTime(m.utc)}
-                        </span>
-                        <span className="flex-1 min-w-[6rem] text-right truncate">{flag(m.team1)} {m.team1}</span>
-                        <span className="text-xs text-[var(--text-muted)] shrink-0">vs</span>
-                        <span className="flex-1 min-w-[6rem] truncate">{m.team2} {flag(m.team2)}</span>
-                        {f && (
+                      <div key={`${m.team1}|${m.team2}`} className="py-2.5">
+                        <div className="flex items-center gap-2">
                           <span
-                            className="text-[10px] px-2 py-0.5 rounded-full shrink-0 tabular-nums"
-                            style={{
-                              fontFamily: "var(--font-mono)",
-                              background: "rgba(212,168,67,0.10)",
-                              border: "1px solid rgba(212,168,67,0.30)",
-                              color: "var(--wc-gold)",
-                            }}
+                            className="text-[10px] tabular-nums w-11 shrink-0"
+                            style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
                           >
-                            {T.lt_forecast}: {f.label} {fmtPct(f.prob)}
+                            {fmtTime(m.utc)}
                           </span>
+                          <span className="flex-1 min-w-0 text-right text-sm truncate">
+                            {flag(m.team1)} {m.team1}
+                          </span>
+                          <span className="text-[10px] shrink-0 px-0.5" style={{ color: "var(--text-muted)" }}>
+                            vs
+                          </span>
+                          <span className="flex-1 min-w-0 text-sm truncate">
+                            {m.team2} {flag(m.team2)}
+                          </span>
+                        </div>
+                        {f && (
+                          <div className="flex justify-end mt-1.5 pl-11">
+                            <span
+                              className="text-[10px] px-2 py-0.5 rounded-full tabular-nums"
+                              style={{
+                                fontFamily: "var(--font-mono)",
+                                background: "rgba(212,168,67,0.10)",
+                                border: "1px solid rgba(212,168,67,0.30)",
+                                color: "var(--wc-gold)",
+                              }}
+                            >
+                              {T.lt_forecast}: {f.label} {fmtPct(f.prob)}
+                            </span>
+                          </div>
                         )}
                       </div>
                     );
@@ -292,7 +331,7 @@ export default function LiveTournament({
               </div>
             ))}
           </div>
-        </motion.div>
+        </motion.section>
       )}
 
       <motion.p
@@ -322,7 +361,7 @@ function Kpi({ label, value, sub, gold }: {
         {label}
       </p>
       <p
-        className="leading-none tabular-nums"
+        className="leading-none tabular-nums flex items-baseline gap-2 flex-wrap"
         style={{
           fontFamily: "var(--font-display)",
           fontSize: "clamp(1.7rem, 4vw, 2.4rem)",
@@ -331,7 +370,7 @@ function Kpi({ label, value, sub, gold }: {
       >
         {value}
         {sub && (
-          <span className="text-sm ml-2" style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+          <span className="text-sm" style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
             {sub}
           </span>
         )}
@@ -340,17 +379,24 @@ function Kpi({ label, value, sub, gold }: {
   );
 }
 
+/** Encabezado editorial: guion rojo + título mono uppercase + nota */
 function SectionTitle({ title, note, dot }: { title: string; note?: string; dot?: boolean }) {
   return (
-    <div className="flex items-baseline gap-2 flex-wrap">
-      {dot && <span className="live-dot self-center shrink-0" />}
+    <div className="flex items-center gap-2.5 flex-wrap">
+      {dot
+        ? <span className="live-dot shrink-0" />
+        : <span className="shrink-0" style={{ width: 18, height: 3, background: "var(--wc-red)" }} />}
       <h3
-        className="text-sm font-bold uppercase tracking-widest"
-        style={{ color: "var(--text-muted)" }}
+        className="text-[11px] font-bold uppercase tracking-[0.18em]"
+        style={{ fontFamily: "var(--font-mono)", color: "var(--text)" }}
       >
         {title}
       </h3>
-      {note && <span className="text-xs text-[var(--text-muted)] opacity-70">· {note}</span>}
+      {note && (
+        <span className="text-xs hidden sm:inline" style={{ color: "var(--text-muted)" }}>
+          · {note}
+        </span>
+      )}
     </div>
   );
 }
