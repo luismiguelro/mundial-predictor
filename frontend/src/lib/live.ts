@@ -1,4 +1,4 @@
-import type { FixedResults, GroupMatch, LiveMatch } from "@/types";
+import type { FixedResults, GroupMatch, LiveMatch, Prediction } from "@/types";
 
 /**
  * Resultados reales del Mundial 2026.
@@ -45,6 +45,7 @@ interface ApiMatch {
   group?: string;
   round?: string;
   utcDate?: string | null;
+  status?: string;
 }
 
 /** Fuente primaria: football-data.org vía nuestro route handler. */
@@ -64,6 +65,8 @@ async function fetchFromApi(): Promise<LiveMatch[] | null> {
       round: m.round,
       // día calendario del usuario: "partidos de hoy" según su zona horaria
       date: m.utcDate ? new Date(m.utcDate).toLocaleDateString("en-CA") : undefined,
+      status: m.status,
+      utc: m.utcDate ?? undefined,
     }));
   } catch {
     return null;
@@ -162,6 +165,88 @@ export function fixturesOfTheDay(
     .sort()[0];
   if (!nextDate) return { date: today, fixtures: [] };
   return { date: nextDate, fixtures: dated.filter((m) => m.date === nextDate) };
+}
+
+/* ── Modelo vs Realidad: veredicto por cada partido terminado ──
+   Usa predictions.json (todas las parejas posibles), así también
+   cubre el knockout cuando se definan los cruces. */
+export interface MatchVerdict {
+  m: LiveMatch;
+  predicted: "t1" | "draw" | "t2";
+  prob: number;
+  probs: { t1: number; draw: number; t2: number };
+  hit: boolean;
+}
+
+export function buildVerdicts(
+  matches: LiveMatch[],
+  predictions: Record<string, Prediction>
+): MatchVerdict[] {
+  const out: MatchVerdict[] = [];
+  for (const m of matches) {
+    if (m.score1 === null || m.score2 === null) continue;
+    let probs: { t1: number; draw: number; t2: number } | null = null;
+    const direct = predictions[`${m.team1}|${m.team2}`];
+    const reverse = predictions[`${m.team2}|${m.team1}`];
+    if (direct) probs = { t1: direct.home_win, draw: direct.draw, t2: direct.away_win };
+    else if (reverse) probs = { t1: reverse.away_win, draw: reverse.draw, t2: reverse.home_win };
+    if (!probs) continue;
+    const actual = m.score1 > m.score2 ? "t1" : m.score1 < m.score2 ? "t2" : "draw";
+    const predicted = (Object.entries(probs)
+      .sort((a, b) => b[1] - a[1])[0][0]) as MatchVerdict["predicted"];
+    out.push({ m, predicted, prob: probs[predicted], probs, hit: predicted === actual });
+  }
+  return out;
+}
+
+/* ── Posiciones reales por grupo, calculadas con los resultados oficiales ── */
+export interface StandingRow {
+  team: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  gf: number;
+  ga: number;
+  gd: number;
+  points: number;
+}
+
+export function computeGroupStandings(
+  matches: LiveMatch[],
+  groups: Record<string, string[]>
+): Record<string, StandingRow[]> {
+  const rowByTeam = new Map<string, StandingRow>();
+  const out: Record<string, StandingRow[]> = {};
+  for (const [g, gteams] of Object.entries(groups)) {
+    out[g] = gteams.map((team) => {
+      const row: StandingRow = {
+        team, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0,
+      };
+      rowByTeam.set(team, row);
+      return row;
+    });
+  }
+  for (const m of matches) {
+    if (m.score1 === null || m.score2 === null) continue;
+    if (!m.group?.startsWith("Group")) continue;
+    const r1 = rowByTeam.get(m.team1);
+    const r2 = rowByTeam.get(m.team2);
+    if (!r1 || !r2) continue;
+    r1.played++; r2.played++;
+    r1.gf += m.score1; r1.ga += m.score2;
+    r2.gf += m.score2; r2.ga += m.score1;
+    if (m.score1 > m.score2)      { r1.won++; r2.lost++; r1.points += 3; }
+    else if (m.score1 < m.score2) { r2.won++; r1.lost++; r2.points += 3; }
+    else                          { r1.drawn++; r2.drawn++; r1.points++; r2.points++; }
+  }
+  for (const g of Object.keys(out)) {
+    for (const r of out[g]) r.gd = r.gf - r.ga;
+    out[g].sort(
+      (a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team)
+    );
+  }
+  return out;
 }
 
 /* ── Veredicto del modelo vs resultado real ── */

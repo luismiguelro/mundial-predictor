@@ -21,6 +21,10 @@ export interface LiveMatch {
   group?: string;
   round?: string;
   date?: string;
+  /** solo vía API football-data: TIMED | IN_PLAY | PAUSED | FINISHED */
+  status?: string;
+  /** solo vía API football-data: fecha-hora UTC del kickoff (ISO) */
+  utc?: string;
 }
 
 /** clave canónica "A|B" (orden alfabético) → ganador o null si empate */

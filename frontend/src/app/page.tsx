@@ -3,20 +3,21 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type {
-  TeamInfo, Prediction, HistoricalMatch, SiteStats,
+  TeamInfo, Prediction, HistoricalMatch, SiteStats, FixedResults,
   Goalscorer, GroupMatch, GroupStandingEntry, LiveMatch, QatarBacktest,
 } from "@/types";
 import { LangContext, type Lang } from "@/lib/i18n";
 import {
-  buildFixedResults, buildLiveStats, buildScoreMap,
-  fetchLiveMatches, modelRecord, type LiveStats,
+  buildFixedResults, buildLiveStats, buildScoreMap, buildVerdicts,
+  fetchLiveMatches, type LiveStats,
 } from "@/lib/live";
-import Predictor    from "@/components/Predictor";
-import SimulatorTab from "@/components/Simulator";
-import FunFacts     from "@/components/FunFacts";
-import Groups       from "@/components/Groups";
-import Knockout     from "@/components/Knockout";
-import Glossary     from "@/components/Glossary";
+import Predictor      from "@/components/Predictor";
+import SimulatorTab   from "@/components/Simulator";
+import FunFacts       from "@/components/FunFacts";
+import Groups         from "@/components/Groups";
+import Knockout       from "@/components/Knockout";
+import Glossary       from "@/components/Glossary";
+import LiveTournament from "@/components/LiveTournament";
 
 /* ─────────────────────────────────────────────────────────────
    UI DEL SHELL (hero, navbar, tabs, footer)
@@ -28,13 +29,15 @@ const SHELL = {
     eyebrow:    "Análisis con Machine Learning",
     subtitle:   "Probabilidades para las 48 selecciones del Mundial 2026, calculadas con un modelo XGBoost calibrado sobre 964 partidos mundialistas, ratings ELO históricos y simulación Monte Carlo.",
     tabs:       [
-      { id: "predictor",     label: "Predictor"     },
+      { id: "envivo",        label: "En Vivo"        },
+      { id: "predictor",     label: "Predictor"      },
       { id: "grupos",        label: "Grupos"         },
-      { id: "eliminatorias", label: "Eliminatorias"  },
-      { id: "simulator",     label: "Simulador"      },
+      { id: "proyecciones",  label: "Proyecciones"   },
       { id: "curiosidades",  label: "Stats"          },
       { id: "glosario",      label: "Glosario"       },
     ],
+    projByRound: "Por ronda",
+    projSim:     "Simulador",
     loading:    "Cargando datos del modelo…",
     footerBy:   "por",
     footerNote: "Modelo entrenado hasta Qatar 2022 · No afiliado a FIFA",
@@ -54,13 +57,15 @@ const SHELL = {
     eyebrow:    "Machine Learning Analysis",
     subtitle:   "Probabilities for all 48 teams at the 2026 World Cup, computed with a calibrated XGBoost model trained on 964 World Cup matches, historical ELO ratings and Monte Carlo simulation.",
     tabs:       [
-      { id: "predictor",     label: "Predictor"    },
+      { id: "envivo",        label: "Live"          },
+      { id: "predictor",     label: "Predictor"     },
       { id: "grupos",        label: "Groups"        },
-      { id: "eliminatorias", label: "Knockout"      },
-      { id: "simulator",     label: "Simulator"     },
+      { id: "proyecciones",  label: "Projections"   },
       { id: "curiosidades",  label: "Stats"         },
       { id: "glosario",      label: "Glossary"      },
     ],
+    projByRound: "By round",
+    projSim:     "Simulator",
     loading:    "Loading model data…",
     footerBy:   "by",
     footerNote: "Model trained up to Qatar 2022 · Not affiliated with FIFA",
@@ -80,13 +85,15 @@ const SHELL = {
     eyebrow:    "Análise com Machine Learning",
     subtitle:   "Probabilidades para as 48 seleções da Copa 2026, calculadas com um modelo XGBoost calibrado sobre 964 jogos de Copa, ratings ELO históricos e simulação Monte Carlo.",
     tabs:       [
-      { id: "predictor",     label: "Preditor"       },
+      { id: "envivo",        label: "Ao Vivo"         },
+      { id: "predictor",     label: "Preditor"        },
       { id: "grupos",        label: "Grupos"          },
-      { id: "eliminatorias", label: "Eliminatórias"   },
-      { id: "simulator",     label: "Simulador"       },
+      { id: "proyecciones",  label: "Projeções"       },
       { id: "curiosidades",  label: "Stats"           },
       { id: "glosario",      label: "Glossário"       },
     ],
+    projByRound: "Por fase",
+    projSim:     "Simulador",
     loading:    "Carregando dados do modelo…",
     footerBy:   "por",
     footerNote: "Modelo treinado até o Qatar 2022 · Não afiliado à FIFA",
@@ -102,14 +109,14 @@ const SHELL = {
   },
 } as const;
 
-type TabId = "predictor" | "grupos" | "eliminatorias" | "simulator" | "curiosidades" | "glosario";
+type TabId = "envivo" | "predictor" | "grupos" | "proyecciones" | "curiosidades" | "glosario";
 
 /* ─────────────────────────────────────────────────────────────
    PAGE
 ───────────────────────────────────────────────────────────── */
 export default function Home() {
   const [lang,  setLang]  = useState<Lang>("es");
-  const [tab,   setTab]   = useState<TabId>("predictor");
+  const [tab,   setTab]   = useState<TabId>("envivo");
 
   const [teams,          setTeams]          = useState<Record<string, TeamInfo> | null>(null);
   const [predictions,    setPredictions]    = useState<Record<string, Prediction> | null>(null);
@@ -134,9 +141,14 @@ export default function Home() {
   const fixedResults = useMemo(() => buildFixedResults(liveMatches), [liveMatches]);
   const liveScores   = useMemo(() => buildScoreMap(liveMatches), [liveMatches]);
   const liveStats    = useMemo(() => buildLiveStats(liveMatches), [liveMatches]);
+  /* Modelo vs Realidad: un solo cálculo para el hero y la pestaña En Vivo */
+  const verdicts     = useMemo(
+    () => (predictions ? buildVerdicts(liveMatches, predictions) : []),
+    [liveMatches, predictions]
+  );
   const record       = useMemo(
-    () => (groupMatches ? modelRecord(groupMatches, liveScores) : { played: 0, hits: 0 }),
-    [groupMatches, liveScores]
+    () => ({ played: verdicts.length, hits: verdicts.filter((v) => v.hit).length }),
+    [verdicts]
   );
 
   /* Persistencia */
@@ -285,6 +297,14 @@ export default function Home() {
             <LoadingState label={S.loading} />
           ) : (
             <AnimatePresence mode="wait">
+              {tab === "envivo" && teams && predictions && groups && (
+                <TabPane key="envivo">
+                  <LiveTournament
+                    teams={teams} predictions={predictions} groups={groups}
+                    liveMatches={liveMatches} stats={liveStats} verdicts={verdicts}
+                  />
+                </TabPane>
+              )}
               {tab === "predictor" && teams && predictions && (
                 <TabPane key="predictor">
                   <Predictor teams={teams} predictions={predictions} matches={matches} liveMatches={liveMatches} />
@@ -295,14 +315,13 @@ export default function Home() {
                   <Groups groupMatches={groupMatches} groupStandings={groupStandings} liveScores={liveScores} />
                 </TabPane>
               )}
-              {tab === "eliminatorias" && teams && predictions && groups && (
-                <TabPane key="eliminatorias">
-                  <Knockout teams={teams} predictions={predictions} groups={groups} />
-                </TabPane>
-              )}
-              {tab === "simulator" && teams && predictions && groups && (
-                <TabPane key="simulator">
-                  <SimulatorTab teams={teams} predictions={predictions} groups={groups} fixedResults={fixedResults} />
+              {tab === "proyecciones" && teams && predictions && groups && (
+                <TabPane key="proyecciones">
+                  <Projections
+                    teams={teams} predictions={predictions} groups={groups}
+                    fixedResults={fixedResults}
+                    byRoundLabel={S.projByRound} simLabel={S.projSim}
+                  />
                 </TabPane>
               )}
               {tab === "curiosidades" && stats && (
@@ -420,6 +439,43 @@ function TournamentStatus({ S, stats, record, teams }: {
         </span>
       )}
     </>
+  );
+}
+
+/* ── Proyecciones: Monte Carlo por ronda + simulador manual en una sola pestaña ── */
+function Projections({ teams, predictions, groups, fixedResults, byRoundLabel, simLabel }: {
+  teams: Record<string, TeamInfo>;
+  predictions: Record<string, Prediction>;
+  groups: Record<string, string[]>;
+  fixedResults: FixedResults;
+  byRoundLabel: string;
+  simLabel: string;
+}) {
+  const [view, setView] = useState<"rondas" | "sim">("rondas");
+  return (
+    <div className="space-y-5">
+      <div className="flex gap-1 bg-[var(--surface-2)] rounded-lg p-1 w-fit mx-auto">
+        {([
+          { key: "rondas" as const, label: byRoundLabel },
+          { key: "sim"    as const, label: simLabel },
+        ]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setView(key)}
+            className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              view === key ? "bg-[var(--wc-red)] text-white" : "text-[var(--text-muted)]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === "rondas" ? (
+        <Knockout teams={teams} predictions={predictions} groups={groups} />
+      ) : (
+        <SimulatorTab teams={teams} predictions={predictions} groups={groups} fixedResults={fixedResults} />
+      )}
+    </div>
   );
 }
 
