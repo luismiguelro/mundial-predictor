@@ -7,16 +7,17 @@ Predictor de resultados del **Mundial FIFA 2026** con Machine Learning: XGBoost 
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-35%20passed-2ea44f)
 
-> 🇨🇦🇺🇸🇲🇽 El torneo arranca el **11 de junio de 2026**. La web fija los resultados reales a medida que se juegan: las probabilidades del simulador son condicionales a lo que ya pasó.
+> 🇨🇦🇺🇸🇲🇽 El torneo está **en juego** (11 jun – 19 jul 2026). La web integra los resultados oficiales al final de cada partido: el modelo se confronta con la realidad en vivo y las probabilidades del simulador son condicionales a lo que ya pasó.
 
 ---
 
 ## ¿Qué hace?
 
-- **Predictor de partido** — probabilidades victoria/empate/derrota para cualquier cruce entre las 48 selecciones clasificadas
+- **En Vivo · Modelo vs Realidad** — marcador del torneo (partidos, goles, aciertos del modelo), veredicto del modelo por cada partido terminado, posiciones oficiales por grupo y próximos partidos con pronóstico
+- **Predictor de partido** — probabilidades victoria/empate/derrota para cualquier cruce entre las 48 selecciones, con los partidos del día precargados
 - **Fase de grupos** — predicción de los 72 partidos y de las posiciones finales de cada grupo (5.000 simulaciones)
-- **Simulador Monte Carlo** — N torneos completos: probabilidad de cada selección de llegar a cada ronda y de ser campeona
-- **Resultados en vivo** — fetch client-side de [openfootball](https://github.com/openfootball/worldcup.json) (sin API key): los partidos jugados se fijan en la simulación
+- **Proyecciones Monte Carlo** — N torneos completos: probabilidad de cada selección de llegar a cada ronda y de ser campeona
+- **Resultados oficiales** — [football-data.org](https://www.football-data.org/) vía proxy cacheado (`/api/live`, token server-side) con fallback a [openfootball](https://github.com/openfootball/worldcup.json): los partidos jugados se fijan en la simulación
 - **Penales con historia** — los empates de knockout se resuelven ponderando el historial real de tandas (Argentina gana 15/23, Inglaterra 4/12 🙃)
 - **Multilenguaje** — Español · English · Português
 
@@ -52,6 +53,7 @@ python scripts/export_frontend_data.py  # genera los JSON del frontend
 # 2. Frontend (Next.js 15)
 cd frontend
 npm install
+cp .env.example .env.local              # opcional: token de football-data.org para resultados oficiales
 npm run dev                             # http://localhost:3000
 
 # Tests
@@ -75,7 +77,8 @@ pytest          # 35 tests
 ## Fuentes de datos
 
 - [International football results 1872–2026](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017) (Kaggle, martj42) — partidos, penales, goleadores, nombres históricos
-- [openfootball/worldcup.json](https://github.com/openfootball/worldcup.json) — fixture y resultados del Mundial 2026, sin API key
+- [football-data.org](https://www.football-data.org/) — resultados oficiales, estados y horarios del Mundial 2026 (tier gratuito, proxy cacheado)
+- [openfootball/worldcup.json](https://github.com/openfootball/worldcup.json) — fallback de fixture y resultados, sin API key
 
 ## Autor
 
