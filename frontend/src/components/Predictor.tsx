@@ -214,7 +214,7 @@ export default function Predictor({ teams, predictions, matches, liveMatches }: 
   }
 
   return (
-    <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-5">
+    <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-5 max-w-3xl mx-auto">
       {/* ── Partidos del día: clic para cargarlos en el predictor ── */}
       {day.fixtures.length > 0 && (
         <motion.div

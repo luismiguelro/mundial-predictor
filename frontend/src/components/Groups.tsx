@@ -167,8 +167,11 @@ export default function Groups({ groupMatches, groupStandings, liveScores }: Pro
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <StandingsCard standings={standings} />
-        <div className="space-y-3">
+        {/* sticky en desktop: acompaña el scroll de la columna de partidos */}
+        <div className="lg:sticky lg:top-[120px]">
+          <StandingsCard standings={standings} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 items-start">
           {matches.map((m) => (
             <MatchCard key={`${m.team1}|${m.team2}`} match={m} liveScores={liveScores} />
           ))}

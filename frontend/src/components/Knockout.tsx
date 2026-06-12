@@ -159,11 +159,13 @@ export default function Knockout({ teams, predictions, groups }: Props) {
           )}
 
           {/* Full ranking list */}
-          <div className="stat-card space-y-1.5 text-left">
+          <div className="stat-card text-left">
             <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[var(--border-subtle)]">
               <span className="text-sm font-bold">{T.rankingFull}</span>
               <span className="text-xs text-[var(--text-muted)]">({sorted.length} {T.teamsUnit})</span>
             </div>
+            {/* 2 columnas en desktop: 1–24 izquierda, 25–48 derecha */}
+            <div className="lg:columns-2 lg:gap-x-10">
             {sorted.map((r, i) => {
               const val = r[round.key] as number;
               const isLatam = LATAM.has(r.team);
@@ -171,7 +173,7 @@ export default function Knockout({ teams, predictions, groups }: Props) {
               return (
                 <div
                   key={r.team}
-                  className="flex items-center gap-3 py-1.5 px-2 rounded-lg transition-colors hover:bg-white/2"
+                  className="flex items-center gap-3 py-1.5 px-2 rounded-lg transition-colors hover:bg-white/2 break-inside-avoid"
                 >
                   <span className="w-5 text-xs text-[var(--text-muted)] text-right tabular-nums shrink-0">
                     {i + 1}
@@ -203,6 +205,7 @@ export default function Knockout({ teams, predictions, groups }: Props) {
                 </div>
               );
             })}
+            </div>
           </div>
 
           <FunnelSummary results={results} />
