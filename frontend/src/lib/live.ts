@@ -42,6 +42,8 @@ interface ApiMatch {
   team2: string;
   score1: number | null;
   score2: number | null;
+  liveScore1?: number | null;
+  liveScore2?: number | null;
   group?: string;
   round?: string;
   utcDate?: string | null;
@@ -61,6 +63,8 @@ async function fetchFromApi(): Promise<LiveMatch[] | null> {
       team2: normalizeName(m.team2),
       score1: typeof m.score1 === "number" ? m.score1 : null,
       score2: typeof m.score2 === "number" ? m.score2 : null,
+      liveScore1: typeof m.liveScore1 === "number" ? m.liveScore1 : null,
+      liveScore2: typeof m.liveScore2 === "number" ? m.liveScore2 : null,
       group: m.group,
       round: m.round,
       // día calendario del usuario: "partidos de hoy" según su zona horaria

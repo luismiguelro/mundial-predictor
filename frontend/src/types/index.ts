@@ -25,6 +25,10 @@ export interface LiveMatch {
   status?: string;
   /** solo vía API football-data: fecha-hora UTC del kickoff (ISO) */
   utc?: string;
+  /** marcador en curso de un partido IN_PLAY/PAUSED (no es resultado final;
+      score1/score2 siguen null hasta FINISHED para no contaminar simulador/veredictos) */
+  liveScore1?: number | null;
+  liveScore2?: number | null;
 }
 
 /** clave canónica "A|B" (orden alfabético) → ganador o null si empate */

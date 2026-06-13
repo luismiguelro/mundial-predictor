@@ -76,8 +76,9 @@ export default function LiveTournament({
     return dates.map((d) => ({ date: d, fixtures: pending.filter((m) => m.date === d) }));
   }, [liveMatches, teams, today]);
 
-  /* Pronóstico del modelo para un partido pendiente */
-  function forecast(m: LiveMatch): { label: string; prob: number } | null {
+  /* Pronóstico del modelo para un partido pendiente o en juego */
+  type Forecast = { label: string; prob: number; probs: { t1: number; draw: number; t2: number } };
+  function forecast(m: LiveMatch): Forecast | null {
     const direct = predictions[`${m.team1}|${m.team2}`];
     const reverse = predictions[`${m.team2}|${m.team1}`];
     const probs = direct
@@ -87,7 +88,7 @@ export default function LiveTournament({
         : null;
     if (!probs) return null;
     const [k, p] = Object.entries(probs).sort((a, b) => b[1] - a[1])[0];
-    return { label: k === "t1" ? m.team1 : k === "t2" ? m.team2 : T.draw, prob: p };
+    return { label: k === "t1" ? m.team1 : k === "t2" ? m.team2 : T.draw, prob: p, probs };
   }
 
   const fmtDate = (d: string) =>
@@ -96,6 +97,20 @@ export default function LiveTournament({
     });
   const fmtTime = (utc?: string) =>
     utc ? new Date(utc).toLocaleTimeString(T.locale, { hour: "2-digit", minute: "2-digit" }) : "";
+
+  /* Zona horaria del dispositivo (ej. "GMT-5") — las horas ya se convierten
+     a la hora local del navegador; esto lo deja explícito para el usuario. */
+  const tzLabel = useMemo(() => {
+    try {
+      return (
+        new Intl.DateTimeFormat(T.locale, { timeZoneName: "short" })
+          .formatToParts(new Date())
+          .find((p) => p.type === "timeZoneName")?.value ?? ""
+      );
+    } catch {
+      return "";
+    }
+  }, [T.locale]);
 
   return (
     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-7">
@@ -118,32 +133,67 @@ export default function LiveTournament({
         <motion.section variants={fadeUp} className="space-y-3">
           <SectionTitle dot title={T.lt_inPlay} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {inPlay.map((m) => (
-              <div
-                key={`${m.team1}|${m.team2}`}
-                className="stat-card !p-4 text-center"
-                style={{ borderColor: "rgba(207,10,44,0.45)" }}
-              >
-                <div className="flex items-center justify-center gap-2 mb-2.5">
-                  <span className="live-dot" />
-                  <span
-                    className="text-[10px] uppercase tracking-[0.18em]"
-                    style={{ fontFamily: "var(--font-mono)", color: "var(--wc-red)" }}
-                  >
-                    {stageLabel(m)}
-                  </span>
+            {inPlay.map((m) => {
+              const half = m.status === "PAUSED";
+              const hasScore =
+                typeof m.liveScore1 === "number" && typeof m.liveScore2 === "number";
+              const f = forecast(m);
+              return (
+                <div
+                  key={`${m.team1}|${m.team2}`}
+                  className="stat-card !p-4 text-center"
+                  style={{ borderColor: "rgba(207,10,44,0.45)" }}
+                >
+                  {/* fase + estado (en juego / entretiempo) */}
+                  <div className="flex items-center justify-center gap-2 mb-2.5">
+                    <span className="live-dot" />
+                    <span
+                      className="text-[10px] uppercase tracking-[0.18em]"
+                      style={{ fontFamily: "var(--font-mono)", color: "var(--wc-red)" }}
+                    >
+                      {stageLabel(m)} · {half ? T.lt_halftime : T.lt_live}
+                    </span>
+                  </div>
+
+                  {/* equipos + marcador en vivo */}
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 min-w-0 text-right text-sm font-bold truncate">
+                      {flag(m.team1)} {m.team1}
+                    </span>
+                    {hasScore ? (
+                      <span
+                        className="score-final shrink-0 px-1 tabular-nums"
+                        style={{ color: "var(--wc-red)" }}
+                      >
+                        {m.liveScore1}–{m.liveScore2}
+                      </span>
+                    ) : (
+                      <span className="text-xs shrink-0 px-1" style={{ color: "var(--text-muted)" }}>
+                        vs
+                      </span>
+                    )}
+                    <span className="flex-1 min-w-0 text-left text-sm font-bold truncate">
+                      {m.team2} {flag(m.team2)}
+                    </span>
+                  </div>
+
+                  {/* pronóstico del modelo */}
+                  {f && (
+                    <>
+                      <div className="flex h-2 rounded-full overflow-hidden mt-3 mb-1.5">
+                        <div style={{ width: `${f.probs.t1 * 100}%`, background: "#c8102e" }} />
+                        <div style={{ width: `${f.probs.draw * 100}%`, background: "rgba(255,255,255,0.15)" }} />
+                        <div style={{ width: `${f.probs.t2 * 100}%`, background: "#003087" }} />
+                      </div>
+                      <p className="text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
+                        {T.lt_forecast}:{" "}
+                        <span className="font-bold" style={{ color: "var(--text)" }}>{f.label}</span> · {fmtPct(f.prob)}
+                      </p>
+                    </>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="flex-1 min-w-0 text-right text-sm font-bold truncate">
-                    {flag(m.team1)} {m.team1}
-                  </span>
-                  <span className="text-xs shrink-0 px-1" style={{ color: "var(--text-muted)" }}>vs</span>
-                  <span className="flex-1 min-w-0 text-left text-sm font-bold truncate">
-                    {m.team2} {flag(m.team2)}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </motion.section>
       )}
@@ -277,7 +327,17 @@ export default function LiveTournament({
       {/* ── Próximos partidos ── */}
       {upcoming.length > 0 && (
         <motion.section variants={fadeUp} className="space-y-3">
-          <SectionTitle title={T.lt_upcoming} />
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <SectionTitle title={T.lt_upcoming} />
+            {tzLabel && (
+              <span
+                className="text-[10px] uppercase tracking-wider"
+                style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+              >
+                🕒 {T.lt_upcomingTz} · {tzLabel}
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
             {upcoming.map(({ date, fixtures }) => (
               <div key={date} className="stat-card !p-4 text-left">

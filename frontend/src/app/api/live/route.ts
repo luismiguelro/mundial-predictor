@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 
 /**
- * Proxy a football-data.org (Mundial 2026) con caché de 2 minutos.
+ * Proxy a football-data.org (Mundial 2026) con caché de 60 segundos.
  * El token vive en el servidor (FOOTBALL_DATA_TOKEN) — nunca llega al navegador.
  * Sin token o con error upstream responde 5xx y el cliente cae al
  * fallback de openfootball (ver src/lib/live.ts).
+ *
+ * Consumo upstream: 1 llamada/min sin importar el tráfico (la caché sirve al
+ * resto). El plan gratuito permite 10/min, así que queda holgado.
  */
 
 const UPSTREAM = "https://api.football-data.org/v4/competitions/WC/matches";
@@ -37,7 +40,7 @@ export async function GET() {
 
   const res = await fetch(UPSTREAM, {
     headers: { "X-Auth-Token": token },
-    next: { revalidate: 120 }, // 1 llamada upstream cada 2 min, sin importar el tráfico
+    next: { revalidate: 60 }, // 1 llamada upstream cada 60 s, sin importar el tráfico
   });
   if (!res.ok) {
     return NextResponse.json({ error: `upstream ${res.status}` }, { status: 502 });
@@ -45,14 +48,18 @@ export async function GET() {
 
   const data = await res.json();
   const matches = ((data?.matches ?? []) as FdMatch[]).map((m) => {
-    // Solo se fijan marcadores de partidos TERMINADOS: la app trata
+    // Solo se fijan marcadores FINALES de partidos TERMINADOS: la app trata
     // un score no-nulo como resultado final (veredictos, simulador).
     const finished = m.status === "FINISHED";
+    const inPlay = m.status === "IN_PLAY" || m.status === "PAUSED";
     return {
       team1: m.homeTeam?.name ?? "",
       team2: m.awayTeam?.name ?? "",
       score1: finished ? (m.score?.fullTime?.home ?? null) : null,
       score2: finished ? (m.score?.fullTime?.away ?? null) : null,
+      // marcador en curso, aparte: solo para la tarjeta "En juego"
+      liveScore1: inPlay ? (m.score?.fullTime?.home ?? null) : null,
+      liveScore2: inPlay ? (m.score?.fullTime?.away ?? null) : null,
       group: formatGroup(m.group),
       round: m.stage ?? undefined,
       utcDate: m.utcDate ?? null,
@@ -62,6 +69,6 @@ export async function GET() {
 
   return NextResponse.json(
     { source: "football-data.org", matches },
-    { headers: { "Cache-Control": "s-maxage=120, stale-while-revalidate=300" } }
+    { headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=120" } }
   );
 }

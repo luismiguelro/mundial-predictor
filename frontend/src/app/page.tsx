@@ -130,11 +130,14 @@ export default function Home() {
   const [qatar,          setQatar]          = useState<QatarBacktest | null>(null);
   const [loading,        setLoading]        = useState(true);
 
-  /* Resultados reales del torneo (openfootball) — no bloquea la carga inicial.
-     Se refresca cada 5 min para captar partidos que terminan con la pestaña abierta. */
+  /* Resultados reales del torneo — no bloquea la carga inicial.
+     Se refresca cada 90 s para captar partidos en juego / que terminan con la
+     pestaña abierta. El proxy /api/live cachea 60 s, así que esto NO aumenta
+     el consumo del plan gratuito de football-data (las peticiones extra solo
+     golpean nuestra caché, no la API externa). */
   useEffect(() => {
     fetchLiveMatches().then(setLiveMatches);
-    const id = setInterval(() => fetchLiveMatches().then(setLiveMatches), 5 * 60_000);
+    const id = setInterval(() => fetchLiveMatches().then(setLiveMatches), 90_000);
     return () => clearInterval(id);
   }, []);
 
