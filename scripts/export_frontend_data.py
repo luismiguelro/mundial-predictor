@@ -12,15 +12,13 @@ sys.path.insert(0, str(ROOT))
 import numpy as np
 import pandas as pd
 
-from src.extractor import load_shootouts
-from src.model import FEATURE_COLS, load_model
+from src.dixon_coles import DixonColesModel, train_dixon_coles
+from src.extractor import load_results, load_shootouts
 from src.simulator import (
     WC2026_GROUPS,
     WC2026_TEAMS,
     build_shootout_stats,
     build_team_stats,
-    build_h2h_stats,
-    precompute_match_probs,
 )
 
 DATA_PROCESSED = ROOT / "data" / "processed"
@@ -134,7 +132,7 @@ CONFEDERATION_MAP = {
 
 def main():
     print("Cargando modelo y datos...")
-    model = load_model(ROOT / "models" / "xgb_calibrated.pkl")
+    dc = DixonColesModel.load(ROOT / "models" / "dixon_coles.json")
     df_features = pd.read_parquet(DATA_PROCESSED / "features.parquet")
     df_wc = pd.read_csv(DATA_PROCESSED / "wc_clean.csv", parse_dates=["date"])
     df_wc = df_wc[df_wc["home_score"].notna()].copy()
@@ -180,19 +178,24 @@ def main():
         json.dumps(WC2026_GROUPS, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    # ── 3. predictions.json ───────────────────────────────────────────────
-    print("Exportando predictions.json (batch de 1128 pares)...")
-    h2h_stats = build_h2h_stats(df_features, WC2026_TEAMS)
-    probs_cache = precompute_match_probs(model, team_stats, h2h_stats, WC2026_TEAMS)
-
+    # ── 3. predictions.json (Dixon-Coles: 1X2 + marcador, mismo modelo) ────
+    print("Exportando predictions.json (Dixon-Coles, todos los pares)...")
     predictions_out = {}
-    for (t1, t2), p in probs_cache.items():
-        key = f"{t1}|{t2}"
-        predictions_out[key] = {
-            "home_win": round(p["team1_win"], 4),
-            "draw": round(p["draw"], 4),
-            "away_win": round(p["team2_win"], 4),
-        }
+    for i, t1 in enumerate(WC2026_TEAMS):
+        for t2 in WC2026_TEAMS[i + 1:]:
+            for a, b in ((t1, t2), (t2, t1)):  # ambas direcciones (espejo)
+                p = dc.predict_1x2(a, b, neutral=True)       # sede neutral en el Mundial
+                sh, sa = dc.most_likely_score(a, b, neutral=True)
+                eh, ea = dc.expected_goals(a, b, neutral=True)
+                predictions_out[f"{a}|{b}"] = {
+                    "home_win": round(p["home_win"], 4),
+                    "draw": round(p["draw"], 4),
+                    "away_win": round(p["away_win"], 4),
+                    "exp_home": round(eh, 2),    # goles esperados (xG del modelo)
+                    "exp_away": round(ea, 2),
+                    "score_home": sh,            # marcador más probable (coherente con 1X2)
+                    "score_away": sa,
+                }
 
     (OUT_DIR / "predictions.json").write_text(
         json.dumps(predictions_out, ensure_ascii=False), encoding="utf-8"
@@ -454,32 +457,39 @@ def main():
     else:
         print("  -> goalscorers.csv no encontrado, saltando")
 
-    # ── 9. qatar2022.json (backtest publico del modelo) ──────────────────────
-    print("Exportando qatar2022.json (backtest)...")
-    from src.model import LABEL_NAMES
+    # ── 9. qatar2022.json (backtest público con Dixon-Coles) ─────────────────
+    # Backtest honesto: el modelo se reentrena SOLO con datos previos al torneo
+    # (sin fuga de información) y predice los 64 partidos de Qatar 2022.
+    print("Exportando qatar2022.json (backtest Dixon-Coles)...")
+    wc2022_start = pd.Timestamp("2022-11-20")
+    df_all_raw = load_results()
+    dc_bt = train_dixon_coles(df_all_raw[df_all_raw["date"] < wc2022_start],
+                              ref_date=wc2022_start)
 
-    df_q = df_features[df_features["year"] == 2022].copy()
-    probas_q = model.predict_proba(df_q[FEATURE_COLS])
-
-    df_scores = df_wc[df_wc["date"].dt.year == 2022][
-        ["date", "home_team", "away_team", "home_score", "away_score"]
-    ]
-    df_q = df_q.merge(df_scores, on=["date", "home_team", "away_team"], how="left")
+    df_q = df_wc[df_wc["date"].dt.year == 2022].copy()
+    labels = ["home_win", "draw", "away_win"]
 
     matches_bt = []
     hits = 0
-    for i, (_, r) in enumerate(df_q.iterrows()):
-        p_home, p_draw, p_away = (float(probas_q[i][0]), float(probas_q[i][1]), float(probas_q[i][2]))
-        predicted = LABEL_NAMES[int(probas_q[i].argmax())]
+    for _, r in df_q.iterrows():
+        h, a = r["home_team"], r["away_team"]
+        if h not in dc_bt.attack or a not in dc_bt.attack:
+            continue
+        p = dc_bt.predict_1x2(h, a, neutral=True)
+        sh, sa = dc_bt.most_likely_score(h, a, neutral=True)
+        vec = [p["home_win"], p["draw"], p["away_win"]]
+        predicted = labels[int(np.argmax(vec))]
         hit = predicted == r["outcome"]
         hits += int(hit)
         matches_bt.append({
             "date": r["date"].strftime("%Y-%m-%d"),
-            "home_team": r["home_team"], "away_team": r["away_team"],
-            "home_flag": TEAM_FLAGS.get(r["home_team"], "🏳️"),
-            "away_flag": TEAM_FLAGS.get(r["away_team"], "🏳️"),
+            "home_team": h, "away_team": a,
+            "home_flag": TEAM_FLAGS.get(h, "🏳️"),
+            "away_flag": TEAM_FLAGS.get(a, "🏳️"),
             "home_score": int(r["home_score"]), "away_score": int(r["away_score"]),
-            "home_win": round(p_home, 4), "draw": round(p_draw, 4), "away_win": round(p_away, 4),
+            "home_win": round(p["home_win"], 4), "draw": round(p["draw"], 4),
+            "away_win": round(p["away_win"], 4),
+            "pred_score_home": sh, "pred_score_away": sa,
             "predicted": predicted, "actual": r["outcome"], "hit": hit,
         })
 

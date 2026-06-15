@@ -88,7 +88,17 @@ function getPrediction(
 ): Prediction {
   if (predictions[`${home}|${away}`]) return predictions[`${home}|${away}`];
   const rev = predictions[`${away}|${home}`];
-  if (rev) return { home_win: rev.away_win, draw: rev.draw, away_win: rev.home_win };
+  if (rev) {
+    return {
+      home_win: rev.away_win,
+      draw: rev.draw,
+      away_win: rev.home_win,
+      exp_home: rev.exp_away,
+      exp_away: rev.exp_home,
+      score_home: rev.score_away,
+      score_away: rev.score_home,
+    };
+  }
   return { home_win: 0.34, draw: 0.32, away_win: 0.34 };
 }
 
@@ -115,25 +125,29 @@ function poissonPmf(k: number, lam: number): number {
 }
 
 /**
- * Marcador más probable vía Poisson independiente (λ = promedio goles
- * anotados vs recibidos), condicionado al resultado que predijo el modelo.
+ * Marcador más probable. Lo aporta directamente el modelo Dixon-Coles
+ * (campos score_home/score_away de la predicción), de modo que el marcador y
+ * las probabilidades 1X2 salen del MISMO modelo y nunca se contradicen.
+ *
+ * Fallback (predicciones antiguas sin marcador): Poisson independiente sobre
+ * los goles esperados del modelo (exp_home/exp_away) o, en último caso, sobre
+ * los promedios del equipo.
  */
 function mostLikelyScore(
   homeInfo: TeamInfo | undefined,
   awayInfo: TeamInfo | undefined,
   pred: Prediction
 ): { s1: number; s2: number } {
-  const l1 = Math.max(0.2, ((homeInfo?.goals_scored ?? 1.3) + (awayInfo?.goals_conceded ?? 1.2)) / 2);
-  const l2 = Math.max(0.2, ((awayInfo?.goals_scored ?? 1.3) + (homeInfo?.goals_conceded ?? 1.2)) / 2);
-  const outcome =
-    pred.home_win >= pred.draw && pred.home_win >= pred.away_win ? "home"
-    : pred.away_win >= pred.draw ? "away" : "draw";
+  if (pred.score_home != null && pred.score_away != null) {
+    return { s1: pred.score_home, s2: pred.score_away };
+  }
 
-  let best = { s1: 1, s2: 1, p: -1 };
-  for (let i = 0; i <= 5; i++) {
-    for (let j = 0; j <= 5; j++) {
-      const consistent = outcome === "home" ? i > j : outcome === "away" ? i < j : i === j;
-      if (!consistent) continue;
+  const l1 = Math.max(0.2, pred.exp_home ?? ((homeInfo?.goals_scored ?? 1.3) + (awayInfo?.goals_conceded ?? 1.2)) / 2);
+  const l2 = Math.max(0.2, pred.exp_away ?? ((awayInfo?.goals_scored ?? 1.3) + (homeInfo?.goals_conceded ?? 1.2)) / 2);
+
+  let best = { s1: 0, s2: 0, p: -1 };
+  for (let i = 0; i <= 6; i++) {
+    for (let j = 0; j <= 6; j++) {
       const p = poissonPmf(i, l1) * poissonPmf(j, l2);
       if (p > best.p) best = { s1: i, s2: j, p };
     }

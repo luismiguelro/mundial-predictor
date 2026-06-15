@@ -27,7 +27,7 @@ const SHELL = {
     navLabel:   "Predictor ML",
     weAre26:    "WE ARE 26",
     eyebrow:    "Análisis con Machine Learning",
-    subtitle:   "Probabilidades para las 48 selecciones del Mundial 2026, calculadas con un modelo XGBoost calibrado sobre 964 partidos mundialistas, ratings ELO históricos y simulación Monte Carlo.",
+    subtitle:   "Probabilidades para las 48 selecciones del Mundial 2026, calculadas con un modelo Dixon-Coles de goles sobre 12 000+ partidos internacionales, ratings ELO históricos y simulación Monte Carlo.",
     tabs:       [
       { id: "envivo",        label: "En Vivo"        },
       { id: "predictor",     label: "Predictor"      },
@@ -40,7 +40,7 @@ const SHELL = {
     projSim:     "Simulador",
     loading:    "Cargando datos del modelo…",
     footerBy:   "por",
-    footerNote: "Modelo entrenado hasta Qatar 2022 · No afiliado a FIFA",
+    footerNote: "Modelo validado en Qatar 2022 · No afiliado a FIFA",
     kickoffIn:  "El torneo arranca en",
     liveNow:    "Torneo en vivo",
     played:     "partidos",
@@ -55,7 +55,7 @@ const SHELL = {
     navLabel:   "ML Predictor",
     weAre26:    "WE ARE 26",
     eyebrow:    "Machine Learning Analysis",
-    subtitle:   "Probabilities for all 48 teams at the 2026 World Cup, computed with a calibrated XGBoost model trained on 964 World Cup matches, historical ELO ratings and Monte Carlo simulation.",
+    subtitle:   "Probabilities for all 48 teams at the 2026 World Cup, computed with a Dixon-Coles goals model trained on 12,000+ international matches, historical ELO ratings and Monte Carlo simulation.",
     tabs:       [
       { id: "envivo",        label: "Live"          },
       { id: "predictor",     label: "Predictor"     },
@@ -68,7 +68,7 @@ const SHELL = {
     projSim:     "Simulator",
     loading:    "Loading model data…",
     footerBy:   "by",
-    footerNote: "Model trained up to Qatar 2022 · Not affiliated with FIFA",
+    footerNote: "Model validated on Qatar 2022 · Not affiliated with FIFA",
     kickoffIn:  "Tournament kicks off in",
     liveNow:    "Tournament live",
     played:     "matches",
@@ -83,7 +83,7 @@ const SHELL = {
     navLabel:   "Preditor ML",
     weAre26:    "WE ARE 26",
     eyebrow:    "Análise com Machine Learning",
-    subtitle:   "Probabilidades para as 48 seleções da Copa 2026, calculadas com um modelo XGBoost calibrado sobre 964 jogos de Copa, ratings ELO históricos e simulação Monte Carlo.",
+    subtitle:   "Probabilidades para as 48 seleções da Copa 2026, calculadas com um modelo Dixon-Coles de gols sobre 12 000+ jogos internacionais, ratings ELO históricos e simulação Monte Carlo.",
     tabs:       [
       { id: "envivo",        label: "Ao Vivo"         },
       { id: "predictor",     label: "Preditor"        },
@@ -96,7 +96,7 @@ const SHELL = {
     projSim:     "Simulador",
     loading:    "Carregando dados do modelo…",
     footerBy:   "por",
-    footerNote: "Modelo treinado até o Qatar 2022 · Não afiliado à FIFA",
+    footerNote: "Modelo validado no Qatar 2022 · Não afiliado à FIFA",
     kickoffIn:  "O torneio começa em",
     liveNow:    "Torneio ao vivo",
     played:     "jogos",
@@ -129,6 +129,8 @@ export default function Home() {
   const [liveMatches,    setLiveMatches]    = useState<LiveMatch[]>([]);
   const [qatar,          setQatar]          = useState<QatarBacktest | null>(null);
   const [loading,        setLoading]        = useState(true);
+  /* Zona horaria por IP (geo de Vercel). null → usar la del sistema. */
+  const [geoTz,          setGeoTz]          = useState<string | null>(null);
 
   /* Resultados reales del torneo — no bloquea la carga inicial.
      Se refresca cada 90 s para captar partidos en juego / que terminan con la
@@ -139,6 +141,15 @@ export default function Home() {
     fetchLiveMatches().then(setLiveMatches);
     const id = setInterval(() => fetchLiveMatches().then(setLiveMatches), 90_000);
     return () => clearInterval(id);
+  }, []);
+
+  /* Zona horaria del visitante por IP (Vercel). Si falla o es local,
+     queda null y los horarios usan la zona del sistema operativo. */
+  useEffect(() => {
+    fetch("/api/geo")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.timezone) setGeoTz(d.timezone); })
+      .catch(() => {});
   }, []);
 
   const fixedResults = useMemo(() => buildFixedResults(liveMatches), [liveMatches]);
@@ -305,6 +316,7 @@ export default function Home() {
                   <LiveTournament
                     teams={teams} predictions={predictions} groups={groups}
                     liveMatches={liveMatches} stats={liveStats} verdicts={verdicts}
+                    timezone={geoTz}
                   />
                 </TabPane>
               )}
