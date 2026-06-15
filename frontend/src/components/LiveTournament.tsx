@@ -15,6 +15,8 @@ interface Props {
   liveMatches: LiveMatch[];
   stats: LiveStats;
   verdicts: MatchVerdict[];
+  /** zona horaria por IP (Vercel geo); null → zona del sistema */
+  timezone?: string | null;
 }
 
 const MVR_PREVIEW = 6; // tarjetas visibles antes de "Ver todos"
@@ -25,7 +27,7 @@ function fmtPct(n: number) { return `${(n * 100).toFixed(0)}%`; }
    EN VIVO — lo que va del torneo: realidad + modelo
 ══════════════════════════════════════════════════════ */
 export default function LiveTournament({
-  teams, predictions, groups, liveMatches, stats, verdicts,
+  teams, predictions, groups, liveMatches, stats, verdicts, timezone,
 }: Props) {
   const T = useLang();
   const [showAll, setShowAll] = useState(false);
@@ -91,26 +93,34 @@ export default function LiveTournament({
     return { label: k === "t1" ? m.team1 : k === "t2" ? m.team2 : T.draw, prob: p, probs };
   }
 
+  /* Si hay zona por IP (geo de Vercel) se usa esa; si no, la del sistema. */
+  const tzOpt = timezone ? { timeZone: timezone } : {};
   const fmtDate = (d: string) =>
-    new Date(d + "T12:00:00").toLocaleDateString(T.locale, {
-      weekday: "short", day: "numeric", month: "short",
+    // mediodía UTC para que el nombre del día no se desplace al cambiar de zona
+    new Date(d + "T12:00:00Z").toLocaleDateString(T.locale, {
+      weekday: "short", day: "numeric", month: "short", ...tzOpt,
     });
   const fmtTime = (utc?: string) =>
-    utc ? new Date(utc).toLocaleTimeString(T.locale, { hour: "2-digit", minute: "2-digit" }) : "";
+    utc
+      ? new Date(utc).toLocaleTimeString(T.locale, {
+          hour: "2-digit", minute: "2-digit", ...tzOpt,
+        })
+      : "";
 
-  /* Zona horaria del dispositivo (ej. "GMT-5") — las horas ya se convierten
-     a la hora local del navegador; esto lo deja explícito para el usuario. */
+  /* Etiqueta de la zona en uso (ej. "GMT-5"), para dejar claro al usuario
+     en qué horario está viendo los partidos. */
   const tzLabel = useMemo(() => {
     try {
       return (
-        new Intl.DateTimeFormat(T.locale, { timeZoneName: "short" })
+        new Intl.DateTimeFormat(T.locale, { timeZoneName: "short", ...tzOpt })
           .formatToParts(new Date())
           .find((p) => p.type === "timeZoneName")?.value ?? ""
       );
     } catch {
       return "";
     }
-  }, [T.locale]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [T.locale, timezone]);
 
   return (
     <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-7">
