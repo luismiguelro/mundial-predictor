@@ -38,6 +38,12 @@ export interface Prediction {
   home_win: number;
   draw: number;
   away_win: number;
+  /** Goles esperados (xG) del modelo Dixon-Coles. Opcional por compatibilidad. */
+  exp_home?: number;
+  exp_away?: number;
+  /** Marcador más probable según el mismo modelo (coherente con las prob. 1X2). */
+  score_home?: number;
+  score_away?: number;
 }
 
 export interface HistoricalMatch {

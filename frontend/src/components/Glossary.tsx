@@ -19,12 +19,12 @@ const TERMS: Term[] = [
       "Rating inicial: 1 500 puntos. K-factor: 32 (estándar FIFA). Calculado cronológicamente sobre 49 000+ partidos internacionales desde 1872. Fórmula: E = 1 / (1 + 10^((rival − propio) / 400)). Nuevo rating = viejo + 32 × (resultado − esperado).",
   },
   {
-    term: "XGBoost calibrado",
+    term: "Modelo Dixon-Coles",
     icon: "🤖",
     definition:
-      "El modelo de predicción. XGBoost es un algoritmo de árboles de decisión con gradient boosting. 'Calibrado' significa que las probabilidades producidas reflejan frecuencias reales.",
+      "El modelo de predicción. En lugar de clasificar el resultado (local/empate/visitante), estima las fuerzas de ataque y defensa de cada equipo y modela los goles con una distribución de Poisson. De esa misma matriz de marcadores salen, coherentes, las probabilidades 1X2 y el marcador más probable.",
     detail:
-      "Entrenado con 964 partidos de fase final del Mundial (1930–2022). Split temporal: entrenado hasta 2018, evaluado en Qatar 2022. Calibración con CalibratedClassifierCV (método isotónico). Accuracy en Qatar 2022: 50% (línea base: ~40%).",
+      "Entrenado con 12 000+ partidos internacionales recientes (no solo Mundiales) con decaimiento temporal (los partidos recientes pesan más) y la corrección de Dixon-Coles para marcadores bajos. Backtest honesto en Qatar 2022: accuracy 53%, log-loss 1.036, Brier 0.201 — mejor que el clasificador anterior en las tres métricas.",
   },
   {
     term: "Monte Carlo",
@@ -40,7 +40,7 @@ const TERMS: Term[] = [
     definition:
       "Métrica principal de evaluación del modelo. Mide qué tan seguros y correctos son los pronósticos. Menor es mejor. Un modelo perfecto tiene log-loss = 0.",
     detail:
-      "XGBoost en Qatar 2022: log-loss = 1.077. Regresión logística baseline: 1.098. Ambos son razonables para un torneo tan impredecible (log-loss de adivinar siempre 1/3 sería 1.099).",
+      "Dixon-Coles en Qatar 2022: log-loss = 1.036, mejor que el clasificador XGBoost anterior (1.088) y que la regresión logística (1.101). Para referencia, adivinar siempre 1/3 daría log-loss = 1.099.",
   },
   {
     term: "Brier Score",
@@ -48,31 +48,31 @@ const TERMS: Term[] = [
     definition:
       "Error cuadrático medio de las probabilidades. Mide qué tan cerca están las probabilidades predichas de los resultados reales (0 = perfecto, 1 = terrible).",
     detail:
-      "Nuestro modelo: Brier = 0.214. Equivale a un error promedio de ±21 puntos porcentuales por predicción.",
+      "Nuestro modelo Dixon-Coles: Brier = 0.201 (mejor que el 0.216 del clasificador anterior). Equivale a un error promedio de ±20 puntos porcentuales por predicción.",
   },
   {
-    term: "H2H (Head-to-Head)",
+    term: "Fuerza de ataque y defensa",
     icon: "⚔️",
     definition:
-      "Historial de enfrentamientos directos entre dos selecciones en fase final del Mundial. Si no se han enfrentado antes, se usa 50% como valor neutro.",
+      "Los dos parámetros que Dixon-Coles estima para cada selección: cuántos goles tiende a marcar (ataque) y cuántos a conceder (defensa). De su combinación salen los goles esperados de cada equipo en un partido.",
     detail:
-      "Feature del modelo: h2h_home_win_pct = victorias del equipo 1 / total partidos H2H. Tiene la correlación más baja de todas las features (0.08) porque la mayoría de dúos nunca se ha enfrentado en un Mundial.",
+      "Goles esperados del local = exp(base + ataque_local + defensa_rival + ventaja_local). En sede neutral (como el Mundial) la ventaja de local se anula. Estos parámetros se ajustan por máxima verosimilitud sobre miles de partidos.",
   },
   {
-    term: "elo_diff",
+    term: "Goles esperados (xG del modelo)",
     icon: "⚡",
     definition:
-      "Diferencia de ELO entre los dos equipos (equipo 1 − equipo 2). Es la feature más predictiva del modelo, con una correlación de 0.40 con el resultado.",
+      "El número medio de goles (λ) que el modelo asigna a cada equipo en un partido concreto. No es un marcador, es una tasa: de ahí se construye la distribución de marcadores posibles.",
     detail:
-      "Una diferencia de +100 ELO implica aproximadamente un 64% de probabilidad de ganar. España (2064) vs Francia (2018) → elo_diff = +46, lo que da a España una ventaja moderada.",
+      "Brasil vs Panamá → ~2.9 vs ~0.6 goles esperados (marcador más probable 2-0). Un partido parejo como Egipto vs Irán → ~0.9 vs ~1.0 (marcador más probable 0-0 o 1-1). Por eso los marcadores ya no son siempre 1-0.",
   },
   {
-    term: "wc_experience_diff",
+    term: "Decaimiento temporal",
     icon: "🏆",
     definition:
-      "Diferencia en número de partidos de Mundial jugados previamente (hasta ese momento). Es la segunda feature más predictiva, con correlación 0.32.",
+      "Los partidos recientes pesan más que los antiguos al estimar las fuerzas de cada equipo. Un resultado de hace 6 meses dice más del nivel actual que uno de hace 8 años.",
     detail:
-      "Captura el efecto de 'veteranía en Mundiales'. Equipos con más experiencia histórica tienden a rendir mejor. Supera a features más intuitivas como el historial de goles.",
+      "Peso = 0.5^(días_de_antigüedad / vida_media), con una vida media de ~2 años. Así el modelo refleja el estado de forma actual sin descartar del todo la información histórica.",
   },
   {
     term: "Formato Mundial 2026",
@@ -86,17 +86,17 @@ const TERMS: Term[] = [
     term: "Split temporal",
     icon: "📅",
     definition:
-      "Técnica anti-leakage para series temporales: el modelo se entrena solo con datos del pasado (hasta 2018) y se evalúa en el futuro (Qatar 2022). Nunca usamos datos del futuro para entrenar.",
+      "Técnica anti-leakage para series temporales: el modelo se entrena solo con datos previos al torneo y se evalúa en el futuro (Qatar 2022). Nunca usamos datos del futuro para entrenar.",
     detail:
       "En datos ordenados por tiempo, un k-fold aleatorio contaminaría el modelo (usaría información del futuro para predecir el pasado). El split temporal garantiza que las métricas son realistas.",
   },
   {
-    term: "Calibración de probabilidades",
+    term: "Corrección de Dixon-Coles",
     icon: "🔧",
     definition:
-      "XGBoost tiende a dar probabilidades extremas aunque el resultado sea incierto. La calibración isotónica corrige esto para que un 60% predicho corresponda a ~60% de victorias reales.",
+      "Un Poisson simple subestima los marcadores bajos (0-0, 1-0, 0-1, 1-1), justo donde se concentran los empates. Dixon-Coles añade un ajuste (rho) que corrige esas cuatro casillas para que los empates aparezcan con su frecuencia real.",
     detail:
-      "Usamos CalibratedClassifierCV con método isotónico y validación cruzada de 5 folds. La diferencia entre probabilidad media predicha y tasa real observada es < 2% para las 3 clases.",
+      "Gracias a ello el modelo asigna ~25% de probabilidad de empate por partido (coherente con el histórico) y el marcador más probable es un empate (1-1, 0-0) en cerca de un tercio de los partidos de grupos.",
   },
 ];
 

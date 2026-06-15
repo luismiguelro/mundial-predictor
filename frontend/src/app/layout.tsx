@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Mundial 2026 Predictor · ML + ELO",
   description:
-    "Predictor de resultados del Mundial FIFA 2026 usando XGBoost calibrado, ratings ELO y simulación Monte Carlo.",
+    "Predictor de resultados del Mundial FIFA 2026 usando el modelo Dixon-Coles de goles, ratings ELO y simulación Monte Carlo.",
   openGraph: {
     title: "Mundial 2026 Predictor",
     description: "Predice partidos, simula el torneo y explora estadísticas históricas.",

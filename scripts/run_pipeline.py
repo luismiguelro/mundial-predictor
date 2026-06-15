@@ -11,6 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import pandas as pd
+
+from src.dixon_coles import evaluate_dixon_coles, train_dixon_coles
 from src.extractor import add_outcome, filter_world_cups, load_results, save_wc_clean
 from src.features import build_feature_matrix, compute_elo_ratings, save_current_elo, save_features
 from src.model import (
@@ -59,6 +62,30 @@ def main() -> None:
             save_model(model, MODELS_DIR / fname)
         if name == "xgb_calibrated":
             metrics[name]["confusion_matrix"] = confusion_matrix_dict(model, test_df)
+
+    # 5. Dixon-Coles: modelo de goles unificado (1X2 + marcador coherentes).
+    #    Entrenado sobre TODOS los partidos internacionales recientes (no solo
+    #    Mundiales) → muchas más muestras de empate y fuerzas de equipo realistas.
+    logger.info("Entrenando Dixon-Coles (modelo de goles)...")
+    wc2022_start = pd.Timestamp("2022-11-20")
+
+    # 5a. Versión backtest para métricas comparables (mismo test: Qatar 2022)
+    df_bt = df_all[df_all["date"] < wc2022_start]
+    dc_bt = train_dixon_coles(df_bt, ref_date=wc2022_start)
+    test_2022 = df_wc_played[
+        (df_wc_played["date"] >= wc2022_start)
+        & (df_wc_played["date"] <= pd.Timestamp("2022-12-18"))
+    ]
+    dc_metrics = evaluate_dixon_coles(dc_bt, test_2022)
+    metrics["dixon_coles"] = {**dc_metrics, "n_train": len(df_bt.dropna(subset=["home_score"]))}
+    logger.info(
+        "Dixon-Coles backtest 2022 — acc=%.3f log_loss=%.3f brier=%.4f",
+        dc_metrics["accuracy"], dc_metrics["log_loss"], dc_metrics["brier_mean"],
+    )
+
+    # 5b. Modelo de producción (todos los datos hasta la fecha) → se exporta
+    dc_prod = train_dixon_coles(df_all)
+    dc_prod.save(MODELS_DIR / "dixon_coles.json")
 
     save_metrics(metrics)
     logger.info("Pipeline completo. Artefactos regenerados en data/processed y models/")
