@@ -19,6 +19,7 @@ import Groups         from "@/components/Groups";
 import Knockout       from "@/components/Knockout";
 import Glossary       from "@/components/Glossary";
 import LiveTournament from "@/components/LiveTournament";
+import Changelog      from "@/components/Changelog";
 
 /* ─────────────────────────────────────────────────────────────
    UI DEL SHELL (hero, navbar, tabs, footer)
@@ -231,6 +232,8 @@ export default function Home() {
 
             {/* Controles derechos */}
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {/* Novedades / registro de cambios */}
+              <Changelog lang={lang} />
               {/* Idioma */}
               <div style={{ display: "flex", gap: "2px" }}>
                 {(["es", "en", "pt"] as Lang[]).map((l) => (
