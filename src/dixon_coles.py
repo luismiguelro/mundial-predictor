@@ -37,6 +37,29 @@ logger = logging.getLogger(__name__)
 MAX_GOALS = 10  # truncamiento de la matriz de marcadores (P(>10 goles) ≈ 0)
 
 
+def tournament_importance(name: str) -> float:
+    """Peso por importancia del partido (similar al K-factor de FIFA/Elo).
+
+    Un amistoso informa menos del nivel real que una eliminatoria o un Mundial,
+    así que pesa menos al estimar las fuerzas de cada equipo.
+    """
+    t = str(name).lower()
+    if "world cup" in t and "qualif" not in t:
+        return 1.0                                  # fase final del Mundial
+    if "qualif" in t:
+        return 0.85                                 # eliminatorias
+    if "nations league" in t:
+        return 0.85
+    if any(k in t for k in (
+        "euro", "copa am", "cup of nations", "asian cup", "gold cup",
+        "confederations", "finalissima",
+    )):
+        return 0.90                                 # fases finales continentales
+    if "friendly" in t:
+        return 0.50                                 # amistosos
+    return 0.70                                     # otras competiciones
+
+
 # ─── Corrección de dependencia de Dixon-Coles ────────────────────────────────
 
 def _tau(h: np.ndarray, a: np.ndarray, lh: np.ndarray, la: np.ndarray, rho: float) -> np.ndarray:
@@ -89,6 +112,7 @@ class DixonColesModel:
         ref_date: Optional[pd.Timestamp] = None,
         min_matches: int = 5,
         alpha: float = 1e-4,
+        shrinkage_k: float = 15.0,
     ) -> "DixonColesModel":
         """Ajusta el modelo sobre partidos con marcador.
 
@@ -100,7 +124,11 @@ class DixonColesModel:
           1. Las fuerzas (ataque/defensa/ventaja local) se estiman con una
              regresión de Poisson ponderada — el modelo base de Dixon-Coles es
              un GLM, así que esto se resuelve por IRLS en segundos.
-          2. La corrección ``rho`` (4 marcadores bajos) se estima después con
+          2. Encogimiento empírico-bayesiano: las fuerzas se acercan a la media
+             según cuántos partidos tiene cada equipo, w = n/(n+shrinkage_k).
+             Un equipo con pocos datos (p.ej. Curazao) se trata casi como
+             promedio; uno con muchos conserva su fuerza estimada.
+          3. La corrección ``rho`` (4 marcadores bajos) se estima después con
              una optimización 1-D, manteniendo las fuerzas fijas.
         """
         df = df.dropna(subset=["home_score", "away_score"]).copy()
@@ -137,6 +165,10 @@ class DixonColesModel:
         xi = np.log(2.0) / self.half_life_days
         weights = np.exp(-xi * age_days)
 
+        # × peso por importancia del partido (amistosos < competiciones)
+        if "tournament" in df.columns:
+            weights = weights * df["tournament"].map(tournament_importance).fillna(0.70).to_numpy()
+
         # ── 1. GLM de Poisson ponderado ──────────────────────────────────────
         # Dos observaciones por partido (goles del local / del visitante).
         # Columnas: [attack_0..n-1, defense_0..n-1, home_adv]
@@ -168,11 +200,20 @@ class DixonColesModel:
         atk_mean = attack.mean()
         attack = attack - atk_mean
         self.base = float(glm.intercept_ + atk_mean)
+
+        # Encogimiento hacia la media según nº de partidos: w = n/(n+k).
+        # El ataque está centrado en 0 → encoge hacia 0; la defensa hacia su media.
+        n_matches = np.bincount(hi, minlength=n) + np.bincount(ai, minlength=n)
+        w = n_matches / (n_matches + shrinkage_k)
+        def_mean = float(defense.mean())
+        attack = attack * w
+        defense = def_mean + w * (defense - def_mean)
+
         self.attack = {t: float(attack[i]) for t, i in self.team_idx.items()}
         self.defense = {t: float(defense[i]) for t, i in self.team_idx.items()}
         self.home_adv = float(coef[2 * n])
         self._default_attack = 0.0
-        self._default_defense = float(np.mean(defense))
+        self._default_defense = def_mean
 
         # ── 2. Corrección rho (optimización 1-D, fuerzas fijas) ──────────────
         log_lh = self.base + attack[hi] + defense[ai] + self.home_adv * (~neutral)

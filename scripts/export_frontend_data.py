@@ -33,32 +33,63 @@ FIXTURE_NAME_MAP = {
     "Curaçao": "Curacao",
 }
 
+# Anfitriones 2026: juegan sus partidos de grupo en casa → ventaja de localía.
+HOSTS = {"Mexico", "Canada", "United States"}
 
-def _sim_group_once(teams, preds, elos, rng):
-    """Una iteración de grupo: retorna teams ordenados por puntos+ELO."""
-    import random
+
+def _poisson(rng, lam):
+    """Muestrea Poisson(lam) con el rng dado (algoritmo de Knuth, seed estable)."""
+    import math
+    L = math.exp(-lam)
+    k, p = 0, 1.0
+    while True:
+        k += 1
+        p *= rng.random()
+        if p <= L:
+            return k - 1
+
+
+def _lambdas(preds, t1, t2):
+    """Goles esperados (λ) orientados a (t1, t2) desde predictions."""
+    d = preds.get(f"{t1}|{t2}")
+    if d and d.get("exp_home") is not None:
+        return d["exp_home"], d["exp_away"]
+    r = preds.get(f"{t2}|{t1}")
+    if r and r.get("exp_home") is not None:
+        return r["exp_away"], r["exp_home"]
+    return 1.3, 1.3
+
+
+def _sim_group_once(teams, preds, elos, rng, hosts=None, host_boost=1.0):
+    """Una iteración de grupo: muestrea marcadores (Poisson con λ del modelo) y
+    ordena por desempates FIFA (puntos → dif. de goles → goles a favor → ELO).
+    Los anfitriones reciben ventaja de localía en sus partidos de grupo."""
+    hosts = hosts or set()
     pts = {t: 0 for t in teams}
+    gf = {t: 0 for t in teams}
+    ga = {t: 0 for t in teams}
     for i in range(len(teams)):
         for j in range(i + 1, len(teams)):
             t1, t2 = teams[i], teams[j]
-            key, rev = f"{t1}|{t2}", f"{t2}|{t1}"
-            if key in preds:
-                p = preds[key]; t1w, dr = p["home_win"], p["draw"]
-            elif rev in preds:
-                p = preds[rev]; t1w, dr = p["away_win"], p["draw"]
-            else:
-                t1w, dr = 0.34, 0.32
-            r = rng.random()
-            if r < t1w:
+            l1, l2 = _lambdas(preds, t1, t2)
+            if t1 in hosts: l1 *= host_boost
+            if t2 in hosts: l2 *= host_boost
+            g1, g2 = _poisson(rng, l1), _poisson(rng, l2)
+            gf[t1] += g1; ga[t1] += g2
+            gf[t2] += g2; ga[t2] += g1
+            if g1 > g2:
                 pts[t1] += 3
-            elif r < t1w + dr:
-                pts[t1] += 1; pts[t2] += 1
-            else:
+            elif g1 < g2:
                 pts[t2] += 3
-    return sorted(teams, key=lambda t: (-pts[t], -elos.get(t, 1500)))
+            else:
+                pts[t1] += 1; pts[t2] += 1
+    return sorted(
+        teams,
+        key=lambda t: (-pts[t], -(gf[t] - ga[t]), -gf[t], -elos.get(t, 1500)),
+    )
 
 
-def compute_group_standings(preds, groups, elos, n=5000):
+def compute_group_standings(preds, groups, elos, n=5000, hosts=None, host_boost=1.0):
     """Monte Carlo: P(1st/2nd/3rd/4th) por equipo en cada grupo. Seed fijo."""
     import random
     rng = random.Random(42)
@@ -66,7 +97,7 @@ def compute_group_standings(preds, groups, elos, n=5000):
     for grp, teams in groups.items():
         counts = {t: [0, 0, 0, 0] for t in teams}
         for _ in range(n):
-            order = _sim_group_once(teams, preds, elos, rng)
+            order = _sim_group_once(teams, preds, elos, rng, hosts, host_boost)
             for pos, t in enumerate(order):
                 counts[t][pos] += 1
         rows = sorted(
@@ -130,9 +161,47 @@ CONFEDERATION_MAP = {
 }
 
 
+def _parse_slot(s: str) -> dict:
+    """Convierte un placeholder del fixture en un slot resoluble.
+
+    '1A' → ganador del grupo A · '2B' → segundo del grupo B
+    '3A/B/C/D/F' → mejor tercero de uno de esos grupos
+    """
+    s = s.strip()
+    if s and s[0] in "12" and len(s) >= 2:
+        return {"type": "pos", "pos": int(s[0]) - 1, "group": s[1:]}
+    if s.startswith("3"):
+        return {"type": "third", "groups": s[1:].split("/")}
+    return {"type": "raw", "value": s}
+
+
+def parse_bracket(fixture_raw: dict) -> dict:
+    """Extrae el cuadro eliminatorio del fixture oficial.
+
+    r32: 16 cruces con slots de posición de grupo / mejor tercero.
+    ko:  R16 → Final, cada cruce referencia ganadores por número ('W74').
+    El partido por el tercer puesto se omite (no está en el camino al título).
+    """
+    KO = {"Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Final"}
+    r32, ko = [], []
+    for m in fixture_raw["matches"]:
+        rd = m.get("round")
+        if rd not in KO:
+            continue
+        num = m.get("num") or 103  # la Final a veces no trae num
+        if rd == "Round of 32":
+            r32.append({"num": num, "a": _parse_slot(m["team1"]), "b": _parse_slot(m["team2"])})
+        else:
+            ko.append({"num": num, "a": m["team1"].strip(), "b": m["team2"].strip()})
+    r32.sort(key=lambda x: x["num"])
+    ko.sort(key=lambda x: x["num"])
+    return {"r32": r32, "ko": ko}
+
+
 def main():
     print("Cargando modelo y datos...")
     dc = DixonColesModel.load(ROOT / "models" / "dixon_coles.json")
+    host_boost = float(np.exp(dc.home_adv))  # factor de goles esperados por jugar en casa
     df_features = pd.read_parquet(DATA_PROCESSED / "features.parquet")
     df_wc = pd.read_csv(DATA_PROCESSED / "wc_clean.csv", parse_dates=["date"])
     df_wc = df_wc[df_wc["home_score"].notna()].copy()
@@ -166,6 +235,9 @@ def main():
             "wc_matches": stats.get("wc_matches", 0),
             "pen_wins": pens["wins"],
             "pen_total": pens["total"],
+            "is_host": team in HOSTS,
+            # factor de localía aplicado a sus partidos de grupo (1.0 si no anfitrión)
+            "host_boost": round(host_boost, 4) if team in HOSTS else 1.0,
         }
 
     (OUT_DIR / "teams.json").write_text(
@@ -374,13 +446,20 @@ def main():
         grp = grp_raw.replace("Group ", "")
         t1 = FIXTURE_NAME_MAP.get(m["team1"], m["team1"])
         t2 = FIXTURE_NAME_MAP.get(m["team2"], m["team2"])
-        key, rev = f"{t1}|{t2}", f"{t2}|{t1}"
-        if key in predictions_out:
-            p = predictions_out[key]; t1w, dr, t2w = p["home_win"], p["draw"], p["away_win"]
-        elif rev in predictions_out:
-            p = predictions_out[rev]; t1w, dr, t2w = p["away_win"], p["draw"], p["home_win"]
+        if t1 in HOSTS or t2 in HOSTS:
+            # Anfitrión local: predicción con ventaja de localía (no neutral)
+            host, away = (t1, t2) if t1 in HOSTS else (t2, t1)
+            pp = dc.predict_1x2(host, away, neutral=False)
+            hw, dr_, aw = pp["home_win"], pp["draw"], pp["away_win"]
+            t1w, dr, t2w = (hw, dr_, aw) if t1 in HOSTS else (aw, dr_, hw)
         else:
-            t1w, dr, t2w = 0.34, 0.32, 0.34
+            key, rev = f"{t1}|{t2}", f"{t2}|{t1}"
+            if key in predictions_out:
+                p = predictions_out[key]; t1w, dr, t2w = p["home_win"], p["draw"], p["away_win"]
+            elif rev in predictions_out:
+                p = predictions_out[rev]; t1w, dr, t2w = p["away_win"], p["draw"], p["home_win"]
+            else:
+                t1w, dr, t2w = 0.34, 0.32, 0.34
         group_matches_out.setdefault(grp, []).append({
             "date": m["date"],
             "round": m["round"],
@@ -402,7 +481,9 @@ def main():
     # ── 7. group_standings.json (Monte Carlo 5 000 sims) ─────────────────────
     print("Exportando group_standings.json (Monte Carlo 5 000 sims)...")
     from src.simulator import WC2026_GROUPS as _GROUPS
-    group_standings = compute_group_standings(predictions_out, _GROUPS, elo_ratings, n=5000)
+    group_standings = compute_group_standings(
+        predictions_out, _GROUPS, elo_ratings, n=5000, hosts=HOSTS, host_boost=host_boost
+    )
     (OUT_DIR / "group_standings.json").write_text(
         json.dumps(group_standings, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -503,6 +584,14 @@ def main():
         json.dumps(qatar_out, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(f"  -> {len(matches_bt)} partidos, accuracy {qatar_out['accuracy']:.1%}")
+
+    # ── 10. bracket.json (cuadro eliminatorio oficial 2026) ──────────────────
+    print("Exportando bracket.json (cuadro oficial)...")
+    bracket_out = parse_bracket(fixture_raw)
+    (OUT_DIR / "bracket.json").write_text(
+        json.dumps(bracket_out, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"  -> {len(bracket_out['r32'])} cruces R32 + {len(bracket_out['ko'])} de R16 a Final")
 
     # ── Resumen ───────────────────────────────────────────────────────────
     print("\n[OK] Exportacion completa:")

@@ -5,7 +5,7 @@ Predictor de resultados del **Mundial FIFA 2026** con Machine Learning: modelo d
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![Model](https://img.shields.io/badge/model-Dixon--Coles-EB5E28)
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-43%20passed-2ea44f)
+![Tests](https://img.shields.io/badge/tests-45%20passed-2ea44f)
 
 > 🇨🇦🇺🇸🇲🇽 El torneo está **en juego** (11 jun – 19 jul 2026). La web integra los resultados oficiales al final de cada partido: el modelo se confronta con la realidad en vivo y las probabilidades del simulador son condicionales a lo que ya pasó.
 
@@ -38,10 +38,13 @@ results.csv (49.378 partidos, 1872–2026)
 | Dixon-Coles en vez de clasificador 1X2 | modela goles → empates con su frecuencia real y marcador coherente con las probabilidades (no más "siempre 1-0") |
 | ELO propio en vez de ranking FIFA | calculado solo sobre resultados, sin sesgos de puntos por confederación |
 | Split temporal (test = Qatar 2022) | nada de KFold aleatorio en series temporales — cero leakage |
-| Decaimiento temporal (vida media ~2 años) | el estado de forma actual pesa más que resultados de hace una década |
-| Monte Carlo en el navegador | la simulación corre client-side sobre los pares pre-calculados |
+| Decaimiento temporal (vida media ~2 años) + peso por importancia | el estado de forma actual pesa más; un amistoso informa menos que una eliminatoria o un Mundial |
+| Encogimiento empírico-bayesiano | equipos con pocos partidos se acercan a la media (w = n/(n+k)) → menos sobreajuste |
+| Ventaja de localía para anfitriones | México, Canadá y USA reciben el `home_adv` del modelo en sus partidos de grupo |
+| Monte Carlo con marcadores reales | muestrea goles (Poisson con los λ del modelo) → desempates FIFA (dif. de goles → goles a favor), no solo V/E/D |
+| Cuadro eliminatorio oficial 2026 | el knockout sigue el bracket real (1ºA vs 3º…), no un sorteo aleatorio |
 
-**Backtest en Qatar 2022 (64 partidos, nunca vistos por el modelo):** accuracy 0.53 · log-loss 1.036 · Brier 0.201 — mejor que el clasificador XGBoost anterior en las tres métricas. El modelo asigna ~25% de probabilidad de empate por partido (coherente con el histórico) y produce marcadores variados. Un modelo aleatorio da 0.33 de accuracy; las casas de apuestas rondan 0.55-0.58.
+**Backtest en Qatar 2022 (64 partidos, nunca vistos por el modelo):** accuracy 0.53 · log-loss 1.029 · Brier 0.201 — mejor que el clasificador XGBoost anterior en las tres métricas. El modelo asigna ~25% de probabilidad de empate por partido (coherente con el histórico) y produce marcadores variados. Un modelo aleatorio da 0.33 de accuracy; las casas de apuestas rondan 0.55-0.58.
 
 ## Correr en local
 
@@ -59,7 +62,7 @@ cp .env.example .env.local              # opcional: token de football-data.org p
 npm run dev                             # http://localhost:3000
 
 # Tests
-pytest          # 43 tests
+pytest          # 45 tests
 ```
 
 > El dataset histórico se descarga de Kaggle ([martj42/international-football-results](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017)) vía `kagglehub` — los CSV no se versionan.
@@ -71,7 +74,7 @@ pytest          # 43 tests
 ├── scripts/            # run_pipeline.py · export_frontend_data.py
 ├── frontend/           # Next.js 15 + React 19 + Tailwind + Recharts (target de deploy)
 │   └── src/lib/        # simulator.ts (Monte Carlo client-side) · live.ts (resultados reales)
-├── tests/              # pytest — 43 tests
+├── tests/              # pytest — 45 tests
 ├── notebooks/          # EDA y análisis de features
 └── data/               # raw (gitignored) · processed (regenerable) · external (fixture 2026)
 ```

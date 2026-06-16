@@ -9,10 +9,11 @@ import type {
 import { LangContext, type Lang } from "@/lib/i18n";
 import {
   buildFixedResults, buildLiveStats, buildScoreMap, buildVerdicts,
-  fetchLiveMatches, type LiveStats,
+  fetchLiveMatches, type LiveStats, type ScoreMap,
 } from "@/lib/live";
 import Predictor      from "@/components/Predictor";
 import SimulatorTab   from "@/components/Simulator";
+import type { Bracket } from "@/lib/simulator";
 import FunFacts       from "@/components/FunFacts";
 import Groups         from "@/components/Groups";
 import Knockout       from "@/components/Knockout";
@@ -128,6 +129,7 @@ export default function Home() {
   const [groupStandings, setGroupStandings] = useState<Record<string, GroupStandingEntry[]> | null>(null);
   const [liveMatches,    setLiveMatches]    = useState<LiveMatch[]>([]);
   const [qatar,          setQatar]          = useState<QatarBacktest | null>(null);
+  const [bracket,        setBracket]        = useState<Bracket | null>(null);
   const [loading,        setLoading]        = useState(true);
   /* Zona horaria por IP (geo de Vercel). null → usar la del sistema. */
   const [geoTz,          setGeoTz]          = useState<string | null>(null);
@@ -186,10 +188,11 @@ export default function Home() {
       fetch("/data/group_matches.json").then((r) => r.json()),
       fetch("/data/group_standings.json").then((r) => r.json()),
       fetch("/data/qatar2022.json").then((r) => r.json()).catch(() => null),
-    ]).then(([t, p, g, m, s, gs, gm, gst, q]) => {
+      fetch("/data/bracket.json").then((r) => r.json()).catch(() => null),
+    ]).then(([t, p, g, m, s, gs, gm, gst, q, br]) => {
       setTeams(t); setPredictions(p); setGroups(g); setMatches(m);
       setStats(s); setGoalscorers(gs); setGroupMatches(gm); setGroupStandings(gst);
-      setQatar(q);
+      setQatar(q); setBracket(br);
       setLoading(false);
     });
   }, []);
@@ -334,7 +337,7 @@ export default function Home() {
                 <TabPane key="proyecciones">
                   <Projections
                     teams={teams} predictions={predictions} groups={groups}
-                    fixedResults={fixedResults}
+                    fixedResults={fixedResults} liveScores={liveScores} bracket={bracket}
                     byRoundLabel={S.projByRound} simLabel={S.projSim}
                   />
                 </TabPane>
@@ -458,11 +461,13 @@ function TournamentStatus({ S, stats, record, teams }: {
 }
 
 /* ── Proyecciones: Monte Carlo por ronda + simulador manual en una sola pestaña ── */
-function Projections({ teams, predictions, groups, fixedResults, byRoundLabel, simLabel }: {
+function Projections({ teams, predictions, groups, fixedResults, liveScores, bracket, byRoundLabel, simLabel }: {
   teams: Record<string, TeamInfo>;
   predictions: Record<string, Prediction>;
   groups: Record<string, string[]>;
   fixedResults: FixedResults;
+  liveScores: ScoreMap;
+  bracket: Bracket | null;
   byRoundLabel: string;
   simLabel: string;
 }) {
@@ -486,9 +491,9 @@ function Projections({ teams, predictions, groups, fixedResults, byRoundLabel, s
         ))}
       </div>
       {view === "rondas" ? (
-        <Knockout teams={teams} predictions={predictions} groups={groups} />
+        <Knockout teams={teams} predictions={predictions} groups={groups} bracket={bracket} />
       ) : (
-        <SimulatorTab teams={teams} predictions={predictions} groups={groups} fixedResults={fixedResults} />
+        <SimulatorTab teams={teams} predictions={predictions} groups={groups} fixedResults={fixedResults} liveScores={liveScores} bracket={bracket} />
       )}
     </div>
   );
