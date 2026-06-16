@@ -385,7 +385,7 @@ export default function Predictor({ teams, predictions, matches, liveMatches }: 
         </div>
       </motion.div>
 
-      {/* ── Marcador más probable (Poisson) ── */}
+      {/* ── Marcador más probable + goles esperados (Dixon-Coles) ── */}
       <AnimatePresence>
         {predicted && (() => {
           const score = mostLikelyScore(homeInfo, awayInfo, pred);
@@ -401,6 +401,14 @@ export default function Predictor({ teams, predictions, matches, liveMatches }: 
               <span className="score-final">
                 {homeInfo?.flag} {score.s1}–{score.s2} {awayInfo?.flag}
               </span>
+              {pred.exp_home != null && pred.exp_away != null && (
+                <span
+                  className="text-xs font-mono px-2 py-1 rounded-lg"
+                  style={{ color: "var(--color-ink-secondary)", background: "rgba(255,255,255,0.04)" }}
+                >
+                  {T.expGoals}: {pred.exp_home.toFixed(2)} – {pred.exp_away.toFixed(2)}
+                </span>
+              )}
               <span className="text-xs" style={{ color: "var(--color-ink-muted)" }}>
                 {T.likelyScoreNote}
               </span>

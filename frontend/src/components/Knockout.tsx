@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useTransition, useMemo } from "react";
 import type { TeamInfo, Prediction, SimResult } from "@/types";
-import { runMonteCarlo } from "@/lib/simulator";
+import { runMonteCarlo, type Bracket } from "@/lib/simulator";
 import { useLang } from "@/lib/i18n";
 
 interface Props {
   teams: Record<string, TeamInfo>;
   predictions: Record<string, Prediction>;
   groups: Record<string, string[]>;
+  bracket?: Bracket | null;
 }
 
 const LATAM = new Set([
@@ -22,7 +23,7 @@ function pct(v: number, decimals = 1) {
   return `${(v * 100).toFixed(decimals)}%`;
 }
 
-export default function Knockout({ teams, predictions, groups }: Props) {
+export default function Knockout({ teams, predictions, groups, bracket }: Props) {
   const T = useLang();
 
   const ROUNDS = useMemo(() => [
@@ -42,10 +43,10 @@ export default function Knockout({ teams, predictions, groups }: Props) {
 
   useEffect(() => {
     startTransition(() => {
-      setResults(runMonteCarlo(predictions, groups, teams, N_SIMS));
+      setResults(runMonteCarlo(predictions, groups, teams, N_SIMS, undefined, undefined, bracket ?? undefined));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [bracket]);
 
   const round = ROUNDS.find((r) => r.key === selected) ?? ROUNDS[1];
 

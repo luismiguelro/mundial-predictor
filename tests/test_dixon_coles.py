@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.dixon_coles import DixonColesModel
+from src.dixon_coles import DixonColesModel, tournament_importance
 
 
 @pytest.fixture
@@ -66,6 +66,15 @@ def test_serializacion_ida_y_vuelta(model):
     assert p1 == p2
 
 
+def test_tournament_importance():
+    """Amistosos pesan menos que competiciones; el Mundial es el máximo."""
+    assert tournament_importance("FIFA World Cup") == 1.0
+    assert tournament_importance("Friendly") == 0.5
+    assert tournament_importance("FIFA World Cup qualification") == 0.85
+    assert tournament_importance("Friendly") < tournament_importance("Copa América")
+    assert tournament_importance("Friendly") < tournament_importance("UEFA Euro")
+
+
 def test_fit_basico():
     """El ajuste corre y produce parámetros usables sobre datos sintéticos."""
     rng = np.random.default_rng(0)
@@ -86,3 +95,29 @@ def test_fit_basico():
     assert set(m.attack) == set(teams)
     p = m.predict_1x2("A", "B", neutral=True)
     assert abs(sum(p.values()) - 1.0) < 1e-9
+
+
+def test_shrinkage_encoge_equipos_con_pocos_datos():
+    """Un equipo goleador con pocos partidos queda más cerca de la media que
+    el mismo perfil con muchos partidos (encogimiento empírico-bayesiano)."""
+    rng = np.random.default_rng(1)
+    base = pd.Timestamp("2021-01-01")
+    rows = []
+    # 'Big' juega mucho y golea; 'Small' golea igual pero con pocos partidos.
+    pool = ["R1", "R2", "R3", "R4"]
+    for i in range(300):
+        opp = pool[i % len(pool)]
+        rows.append({"date": base + pd.Timedelta(days=i), "home_team": "Big", "away_team": opp,
+                     "home_score": 4, "away_score": 0, "neutral": True})
+    for i in range(6):
+        rows.append({"date": base + pd.Timedelta(days=i), "home_team": "Small", "away_team": pool[i % len(pool)],
+                     "home_score": 4, "away_score": 0, "neutral": True})
+    # relleno entre los rivales para que tengan historial
+    for i in range(200):
+        a, b = rng.choice(pool, 2, replace=False)
+        rows.append({"date": base + pd.Timedelta(days=i), "home_team": a, "away_team": b,
+                     "home_score": 1, "away_score": 1, "neutral": True})
+    df = pd.DataFrame(rows)
+    m = DixonColesModel(half_life_days=3650).fit(df, min_matches=5, shrinkage_k=20)
+    # Ambos golean 4-0, pero 'Small' tiene muchos menos datos → más encogido a la media (0)
+    assert m.attack["Small"] < m.attack["Big"]

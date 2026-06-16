@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import type { SimResult } from "@/types";
-import { runMonteCarlo } from "@/lib/simulator";
+import { runMonteCarlo, type Bracket } from "@/lib/simulator";
+import type { ScoreMap } from "@/lib/live";
 import type { TeamInfo, Prediction, FixedResults } from "@/types";
 import { useLang } from "@/lib/i18n";
 
@@ -11,6 +12,8 @@ interface Props {
   predictions: Record<string, Prediction>;
   groups: Record<string, string[]>;
   fixedResults?: FixedResults;
+  liveScores?: ScoreMap;
+  bracket?: Bracket | null;
 }
 
 const LATAM = new Set(["Colombia", "Argentina", "Brazil", "Uruguay", "Ecuador", "Venezuela", "Mexico", "Chile", "Peru"]);
@@ -30,7 +33,7 @@ function PctBar({ value, color }: { value: number; color: string }) {
 
 type ViewMode = "knockout" | "groups";
 
-export default function SimulatorTab({ teams, predictions, groups, fixedResults }: Props) {
+export default function SimulatorTab({ teams, predictions, groups, fixedResults, liveScores, bracket }: Props) {
   const T = useLang();
   const [n, setN]         = useState(1000);
   const [filter, setFilter] = useState("all");
@@ -56,7 +59,7 @@ export default function SimulatorTab({ teams, predictions, groups, fixedResults 
 
   function simulate() {
     startTransition(() => {
-      const r = runMonteCarlo(predictions, groups, teams, n, fixedResults);
+      const r = runMonteCarlo(predictions, groups, teams, n, fixedResults, liveScores, bracket ?? undefined);
       setResults(r);
     });
   }

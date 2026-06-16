@@ -70,6 +70,7 @@ export const UI = {
     backtestMore:    "Ver todos",
     backtestLess:    "Ver menos",
     likelyScore:     "Marcador más probable",
+    expGoals:        "Goles esperados (xG)",
     likelyScoreNote: "marcador más probable del modelo Dixon-Coles, coherente con las probabilidades",
     /* En Vivo */
     lt_played:        "Partidos jugados",
@@ -236,6 +237,7 @@ export const UI = {
     backtestMore:    "Show all",
     backtestLess:    "Show less",
     likelyScore:     "Most likely score",
+    expGoals:        "Expected goals (xG)",
     likelyScoreNote: "most likely score from the Dixon-Coles model, consistent with the probabilities",
     lt_played:        "Matches played",
     lt_goals:         "Goals",
@@ -394,6 +396,7 @@ export const UI = {
     backtestMore:    "Ver todos",
     backtestLess:    "Ver menos",
     likelyScore:     "Placar mais provável",
+    expGoals:        "Gols esperados (xG)",
     likelyScoreNote: "placar mais provável do modelo Dixon-Coles, coerente com as probabilidades",
     lt_played:        "Jogos disputados",
     lt_goals:         "Gols",

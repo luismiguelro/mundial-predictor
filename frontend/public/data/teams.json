@@ -9,7 +9,9 @@
     "goals_conceded": 1.4,
     "wc_matches": 60,
     "pen_wins": 7,
-    "pen_total": 14
+    "pen_total": 14,
+    "is_host": true,
+    "host_boost": 1.2704
   },
   "South Africa": {
     "elo": 1625.7,
@@ -21,7 +23,9 @@
     "goals_conceded": 1.0,
     "wc_matches": 9,
     "pen_wins": 13,
-    "pen_total": 28
+    "pen_total": 28,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "South Korea": {
     "elo": 1828.3,
@@ -33,7 +37,9 @@
     "goals_conceded": 0.8,
     "wc_matches": 38,
     "pen_wins": 15,
-    "pen_total": 25
+    "pen_total": 25,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Czech Republic": {
     "elo": 1771.1,
@@ -45,7 +51,9 @@
     "goals_conceded": 0.4,
     "wc_matches": 33,
     "pen_wins": 6,
-    "pen_total": 7
+    "pen_total": 7,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Canada": {
     "elo": 1829.2,
@@ -57,7 +65,9 @@
     "goals_conceded": 2.0,
     "wc_matches": 6,
     "pen_wins": 3,
-    "pen_total": 8
+    "pen_total": 8,
+    "is_host": true,
+    "host_boost": 1.2704
   },
   "Qatar": {
     "elo": 1583.9,
@@ -69,7 +79,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 3,
     "pen_wins": 5,
-    "pen_total": 9
+    "pen_total": 9,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Bosnia and Herzegovina": {
     "elo": 1632.8,
@@ -81,7 +93,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 3,
     "pen_wins": 3,
-    "pen_total": 4
+    "pen_total": 4,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Switzerland": {
     "elo": 1862.8,
@@ -93,7 +107,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 41,
     "pen_wins": 2,
-    "pen_total": 8
+    "pen_total": 8,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Brazil": {
     "elo": 1947.3,
@@ -105,7 +121,9 @@
     "goals_conceded": 0.6,
     "wc_matches": 114,
     "pen_wins": 9,
-    "pen_total": 16
+    "pen_total": 16,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Haiti": {
     "elo": 1617.7,
@@ -117,7 +135,9 @@
     "goals_conceded": 3.0,
     "wc_matches": 3,
     "pen_wins": 1,
-    "pen_total": 2
+    "pen_total": 2,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Morocco": {
     "elo": 1920.0,
@@ -129,7 +149,9 @@
     "goals_conceded": 0.6,
     "wc_matches": 23,
     "pen_wins": 6,
-    "pen_total": 14
+    "pen_total": 14,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Scotland": {
     "elo": 1748.4,
@@ -141,7 +163,9 @@
     "goals_conceded": 1.0,
     "wc_matches": 23,
     "pen_wins": 2,
-    "pen_total": 2
+    "pen_total": 2,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "United States": {
     "elo": 1830.6,
@@ -153,7 +177,9 @@
     "goals_conceded": 0.6,
     "wc_matches": 37,
     "pen_wins": 6,
-    "pen_total": 10
+    "pen_total": 10,
+    "is_host": true,
+    "host_boost": 1.2704
   },
   "Paraguay": {
     "elo": 1799.8,
@@ -165,7 +191,9 @@
     "goals_conceded": 0.2,
     "wc_matches": 27,
     "pen_wins": 6,
-    "pen_total": 13
+    "pen_total": 13,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Turkey": {
     "elo": 1870.2,
@@ -177,7 +205,9 @@
     "goals_conceded": 0.4,
     "wc_matches": 10,
     "pen_wins": 1,
-    "pen_total": 1
+    "pen_total": 1,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Australia": {
     "elo": 1801.5,
@@ -189,7 +219,9 @@
     "goals_conceded": 0.8,
     "wc_matches": 20,
     "pen_wins": 5,
-    "pen_total": 8
+    "pen_total": 8,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Germany": {
     "elo": 1945.2,
@@ -201,7 +233,9 @@
     "goals_conceded": 1.4,
     "wc_matches": 112,
     "pen_wins": 6,
-    "pen_total": 8
+    "pen_total": 8,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Ecuador": {
     "elo": 1898.7,
@@ -213,7 +247,9 @@
     "goals_conceded": 0.2,
     "wc_matches": 13,
     "pen_wins": 2,
-    "pen_total": 4
+    "pen_total": 4,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Ivory Coast": {
     "elo": 1747.1,
@@ -225,7 +261,9 @@
     "goals_conceded": 1.6,
     "wc_matches": 9,
     "pen_wins": 10,
-    "pen_total": 18
+    "pen_total": 18,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Curacao": {
     "elo": 1515.9,
@@ -237,7 +275,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 0,
     "pen_wins": 0,
-    "pen_total": 2
+    "pen_total": 2,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Netherlands": {
     "elo": 1918.3,
@@ -249,7 +289,9 @@
     "goals_conceded": 0.4,
     "wc_matches": 55,
     "pen_wins": 2,
-    "pen_total": 10
+    "pen_total": 10,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Japan": {
     "elo": 1922.1,
@@ -261,7 +303,9 @@
     "goals_conceded": 1.0,
     "wc_matches": 25,
     "pen_wins": 5,
-    "pen_total": 12
+    "pen_total": 12,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Sweden": {
     "elo": 1754.7,
@@ -273,7 +317,9 @@
     "goals_conceded": 0.4,
     "wc_matches": 51,
     "pen_wins": 4,
-    "pen_total": 6
+    "pen_total": 6,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Tunisia": {
     "elo": 1693.5,
@@ -285,7 +331,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 18,
     "pen_wins": 7,
-    "pen_total": 13
+    "pen_total": 13,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Belgium": {
     "elo": 1883.1,
@@ -297,7 +345,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 51,
     "pen_wins": 2,
-    "pen_total": 2
+    "pen_total": 2,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Egypt": {
     "elo": 1766.7,
@@ -309,7 +359,9 @@
     "goals_conceded": 1.6,
     "wc_matches": 7,
     "pen_wins": 15,
-    "pen_total": 26
+    "pen_total": 26,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Iran": {
     "elo": 1821.0,
@@ -321,7 +373,9 @@
     "goals_conceded": 1.8,
     "wc_matches": 18,
     "pen_wins": 10,
-    "pen_total": 23
+    "pen_total": 23,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "New Zealand": {
     "elo": 1633.0,
@@ -333,7 +387,9 @@
     "goals_conceded": 1.4,
     "wc_matches": 6,
     "pen_wins": 1,
-    "pen_total": 4
+    "pen_total": 4,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Spain": {
     "elo": 2067.7,
@@ -345,7 +401,9 @@
     "goals_conceded": 0.8,
     "wc_matches": 67,
     "pen_wins": 7,
-    "pen_total": 14
+    "pen_total": 14,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Uruguay": {
     "elo": 1860.1,
@@ -357,7 +415,9 @@
     "goals_conceded": 0.6,
     "wc_matches": 59,
     "pen_wins": 9,
-    "pen_total": 17
+    "pen_total": 17,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Saudi Arabia": {
     "elo": 1653.7,
@@ -369,7 +429,9 @@
     "goals_conceded": 1.0,
     "wc_matches": 19,
     "pen_wins": 7,
-    "pen_total": 9
+    "pen_total": 9,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Cape Verde": {
     "elo": 1646.3,
@@ -381,7 +443,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 0,
     "pen_wins": 2,
-    "pen_total": 5
+    "pen_total": 5,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "France": {
     "elo": 2021.6,
@@ -393,7 +457,9 @@
     "goals_conceded": 0.8,
     "wc_matches": 73,
     "pen_wins": 5,
-    "pen_total": 11
+    "pen_total": 11,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Senegal": {
     "elo": 1829.1,
@@ -405,7 +471,9 @@
     "goals_conceded": 1.0,
     "wc_matches": 12,
     "pen_wins": 11,
-    "pen_total": 21
+    "pen_total": 21,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Norway": {
     "elo": 1851.2,
@@ -417,7 +485,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 8,
     "pen_wins": 0,
-    "pen_total": 0
+    "pen_total": 0,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Iraq": {
     "elo": 1707.8,
@@ -429,7 +499,9 @@
     "goals_conceded": 1.8,
     "wc_matches": 3,
     "pen_wins": 11,
-    "pen_total": 15
+    "pen_total": 15,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Argentina": {
     "elo": 2053.4,
@@ -441,7 +513,9 @@
     "goals_conceded": 0.6,
     "wc_matches": 88,
     "pen_wins": 15,
-    "pen_total": 23
+    "pen_total": 23,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Algeria": {
     "elo": 1827.9,
@@ -453,7 +527,9 @@
     "goals_conceded": 1.4,
     "wc_matches": 13,
     "pen_wins": 7,
-    "pen_total": 15
+    "pen_total": 15,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Austria": {
     "elo": 1850.7,
@@ -465,7 +541,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 29,
     "pen_wins": 0,
-    "pen_total": 2
+    "pen_total": 2,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Jordan": {
     "elo": 1689.7,
@@ -477,7 +555,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 0,
     "pen_wins": 0,
-    "pen_total": 3
+    "pen_total": 3,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Colombia": {
     "elo": 1933.2,
@@ -489,7 +569,9 @@
     "goals_conceded": 0.4,
     "wc_matches": 22,
     "pen_wins": 7,
-    "pen_total": 12
+    "pen_total": 12,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Portugal": {
     "elo": 1950.2,
@@ -501,7 +583,9 @@
     "goals_conceded": 1.0,
     "wc_matches": 35,
     "pen_wins": 5,
-    "pen_total": 8
+    "pen_total": 8,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "DR Congo": {
     "elo": 1693.4,
@@ -513,7 +597,9 @@
     "goals_conceded": 3.0,
     "wc_matches": 3,
     "pen_wins": 5,
-    "pen_total": 8
+    "pen_total": 8,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Uzbekistan": {
     "elo": 1763.8,
@@ -525,7 +611,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 0,
     "pen_wins": 2,
-    "pen_total": 5
+    "pen_total": 5,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "England": {
     "elo": 1944.2,
@@ -537,7 +625,9 @@
     "goals_conceded": 1.0,
     "wc_matches": 74,
     "pen_wins": 4,
-    "pen_total": 12
+    "pen_total": 12,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Croatia": {
     "elo": 1887.5,
@@ -549,7 +639,9 @@
     "goals_conceded": 1.2,
     "wc_matches": 30,
     "pen_wins": 7,
-    "pen_total": 11
+    "pen_total": 11,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Ghana": {
     "elo": 1570.2,
@@ -561,7 +653,9 @@
     "goals_conceded": 1.6,
     "wc_matches": 15,
     "pen_wins": 5,
-    "pen_total": 13
+    "pen_total": 13,
+    "is_host": false,
+    "host_boost": 1.0
   },
   "Panama": {
     "elo": 1735.2,
@@ -573,6 +667,8 @@
     "goals_conceded": 2.0,
     "wc_matches": 3,
     "pen_wins": 5,
-    "pen_total": 7
+    "pen_total": 7,
+    "is_host": false,
+    "host_boost": 1.0
   }
 }

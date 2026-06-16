@@ -9,6 +9,10 @@ export interface TeamInfo {
   wc_matches: number;
   pen_wins: number;
   pen_total: number;
+  /** Anfitrión 2026 (juega de local en fase de grupos). */
+  is_host?: boolean;
+  /** Factor de localía aplicado a sus λ en partidos de grupo (1.0 si no anfitrión). */
+  host_boost?: number;
 }
 
 // ── Live tournament (openfootball) ─────────────────────────────────────────────
