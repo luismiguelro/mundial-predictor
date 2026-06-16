@@ -66,11 +66,21 @@ def test_normalize_team_names_no_mutation():
     assert df.loc[0, "home_team"] == "Zaïre"  # el original no cambia
 
 
-def test_load_former_names_resolves_chains():
-    mapping = load_former_names()
-    # cadena: Netherlands Antilles → Curaçao → Curacao
+def test_load_former_names_resolves_chains(tmp_path):
+    # CSV de muestra autocontenido: el dataset real (data/raw/*.csv) está
+    # gitignored y no existe en CI, así que el test no debe depender de él.
+    csv = tmp_path / "former_names.csv"
+    csv.write_text(
+        "former,current\n"
+        "Netherlands Antilles,Curaçao\n"
+        "Zaïre,DR Congo\n"
+        "Soviet Union,Russia\n",
+        encoding="utf-8",
+    )
+    mapping = load_former_names(csv)
+    # cadena CSV + SUCCESSOR_MAP: Netherlands Antilles → Curaçao → Curacao
     assert mapping["Netherlands Antilles"] == "Curacao"
-    assert mapping["Curaçao"] == "Curacao"
+    assert mapping["Curaçao"] == "Curacao"          # SUCCESSOR_MAP
     assert mapping["Zaïre"] == "DR Congo"
-    assert mapping["Czechoslovakia"] == "Czech Republic"
+    assert mapping["Czechoslovakia"] == "Czech Republic"  # SUCCESSOR_MAP
     assert mapping["Soviet Union"] == "Russia"
