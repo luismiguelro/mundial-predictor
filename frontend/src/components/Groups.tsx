@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { GroupMatch, GroupStandingEntry } from "@/types";
 import { useLang } from "@/lib/i18n";
-import { modelRecord, modelVerdict, orientScore, type ScoreMap } from "@/lib/live";
+import {
+  groupPositionResult, modelRecord, modelVerdict, orientScore,
+  type GroupPositionResult, type ScoreMap,
+} from "@/lib/live";
 
 interface Props {
   groupMatches: Record<string, GroupMatch[]>;
@@ -12,6 +15,22 @@ interface Props {
 }
 
 function fmt(n: number) { return `${(n * 100).toFixed(0)}%`; }
+
+/** nº de jornada dentro de "Matchday N" (para ordenar dentro de la misma fecha). */
+function roundNum(round: string): number {
+  const n = parseInt(round.replace(/\D+/g, ""), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Parte los 6 partidos de un grupo en sus 3 jornadas (2 por jornada). */
+function splitByMatchday(matches: GroupMatch[]): GroupMatch[][] {
+  const sorted = [...matches].sort(
+    (a, b) => a.date.localeCompare(b.date) || roundNum(a.round) - roundNum(b.round)
+  );
+  const out: GroupMatch[][] = [];
+  for (let i = 0; i < sorted.length; i += 2) out.push(sorted.slice(i, i + 2));
+  return out;
+}
 
 function MatchCard({ match, liveScores }: { match: GroupMatch; liveScores?: ScoreMap }) {
   const T = useLang();
@@ -76,15 +95,42 @@ function MatchCard({ match, liveScores }: { match: GroupMatch; liveScores?: Scor
   );
 }
 
-function StandingsCard({ standings }: { standings: GroupStandingEntry[] }) {
+function StandingsCard({ standings, posResult }: {
+  standings: GroupStandingEntry[];
+  posResult: GroupPositionResult;
+}) {
   const T = useLang();
-  const sorted = [...standings].sort((a, b) => b.first - a.first);
+  // mismo criterio que predictedOrder() en live.ts: posición final esperada
+  const expPos = (s: GroupStandingEntry) => s.first + 2 * s.second + 3 * s.third + 4 * s.fourth;
+  const sorted = [...standings].sort((a, b) => expPos(a) - expPos(b));
   return (
     <div className="stat-card text-left">
       <h4 className="font-bold text-sm mb-3 flex items-center gap-2">
         <span>{T.groupPredTitle}</span>
         <span className="text-[var(--text-muted)] font-normal text-xs">(5 000 sims)</span>
       </h4>
+
+      {/* aciertos de posición — solo cuando el grupo ya está definido */}
+      {posResult.complete && (
+        <div
+          className="flex items-center gap-2 text-xs rounded-md px-2.5 py-2 mb-3"
+          style={{
+            background: "rgba(212,168,67,0.08)",
+            border: "1px solid rgba(212,168,67,0.35)",
+          }}
+        >
+          <span className="font-bold uppercase tracking-wider" style={{ color: "var(--wc-gold)" }}>
+            ✓ {T.groupDecided}
+          </span>
+          <span className="text-[var(--text)]">
+            {T.posModelGot}{" "}
+            <strong style={{ color: "var(--wc-gold)" }}>
+              {posResult.correct}/{posResult.total}
+            </strong>{" "}
+            {T.posCorrect}
+          </span>
+        </div>
+      )}
       <table>
         <thead>
           <tr>
@@ -124,18 +170,68 @@ function StandingsCard({ standings }: { standings: GroupStandingEntry[] }) {
   );
 }
 
+function MatchdaySection({ index, matches, dateLabel, liveScores }: {
+  index: number;
+  matches: GroupMatch[];
+  dateLabel: string;
+  liveScores?: ScoreMap;
+}) {
+  const T = useLang();
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2.5">
+        <span
+          className="font-bold text-xs uppercase tracking-wider"
+          style={{ color: "var(--wc-gold)" }}
+        >
+          {T.jornada} {index + 1}
+        </span>
+        <span className="text-xs text-[var(--text-muted)]">· {dateLabel}</span>
+        <span className="flex-1 h-px" style={{ background: "var(--border-subtle)" }} />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+        {matches.map((m) => (
+          <MatchCard key={`${m.team1}|${m.team2}`} match={m} liveScores={liveScores} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Groups({ groupMatches, groupStandings, liveScores }: Props) {
   const T = useLang();
+  const scores = liveScores ?? new Map();
   const groups = Object.keys(groupMatches).sort();
   const [selected, setSelected] = useState(groups.includes("K") ? "K" : groups[0] ?? "A");
 
-  const matches = (groupMatches[selected] ?? [])
-    .slice()
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const matchdays = splitByMatchday(groupMatches[selected] ?? []);
   const standings = groupStandings[selected] ?? [];
 
   // récord global del modelo sobre los partidos ya jugados
-  const { played, hits } = modelRecord(groupMatches, liveScores ?? new Map());
+  const { played, hits } = modelRecord(groupMatches, scores);
+
+  // aciertos de posición: por grupo (para el panel) y agregado (para el banner)
+  const posResult = useMemo(
+    () => groupPositionResult(groupMatches[selected] ?? [], standings, scores),
+    [groupMatches, selected, standings, scores]
+  );
+  const aggregate = useMemo(() => {
+    let correct = 0, total = 0, doneGroups = 0;
+    for (const g of groups) {
+      const r = groupPositionResult(groupMatches[g] ?? [], groupStandings[g] ?? [], scores);
+      if (r.complete) { correct += r.correct; total += r.total; doneGroups++; }
+    }
+    return { correct, total, doneGroups, allDone: doneGroups === groups.length };
+  }, [groups, groupMatches, groupStandings, scores]);
+
+  const localeDate = (iso: string) =>
+    new Date(iso + "T12:00:00").toLocaleDateString(T.locale, { month: "short", day: "numeric" });
+  const mdLabel = (md: GroupMatch[]) => {
+    const dates = [...new Set(md.map((m) => m.date))].sort();
+    return dates.length > 1
+      ? `${localeDate(dates[0])} – ${localeDate(dates[dates.length - 1])}`
+      : localeDate(dates[0] ?? "");
+  };
 
   return (
     <div className="space-y-6">
@@ -147,6 +243,20 @@ export default function Groups({ groupMatches, groupStandings, liveScores }: Pro
             {hits}/{played} ({played ? Math.round((hits / played) * 100) : 0}%)
           </span>
           <span className="text-xs text-[var(--text-muted)]">· {T.modelRecordNote}</span>
+        </div>
+      )}
+
+      {/* aciertos de posición agregados — al cerrar toda la fase de grupos */}
+      {aggregate.allDone && aggregate.total > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-2 text-sm rounded-md px-3 py-2.5"
+          style={{ background: "rgba(212,168,67,0.08)", border: "1px solid rgba(212,168,67,0.4)" }}
+        >
+          <span className="font-bold" style={{ color: "var(--wc-gold)" }}>🎯 {T.posAccAllTitle}:</span>
+          <span className="tabular-nums font-bold" style={{ color: "var(--wc-gold)" }}>
+            {aggregate.correct}/{aggregate.total} ({Math.round((aggregate.correct / aggregate.total) * 100)}%)
+          </span>
+          <span className="text-xs text-[var(--text-muted)]">· {T.posAccAllNote}</span>
         </div>
       )}
 
@@ -169,11 +279,17 @@ export default function Groups({ groupMatches, groupStandings, liveScores }: Pro
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* sticky en desktop: acompaña el scroll de la columna de partidos */}
         <div className="lg:sticky lg:top-[120px]">
-          <StandingsCard standings={standings} />
+          <StandingsCard standings={standings} posResult={posResult} />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 items-start">
-          {matches.map((m) => (
-            <MatchCard key={`${m.team1}|${m.team2}`} match={m} liveScores={liveScores} />
+        <div className="space-y-5">
+          {matchdays.map((md, i) => (
+            <MatchdaySection
+              key={i}
+              index={i}
+              matches={md}
+              dateLabel={mdLabel(md)}
+              liveScores={liveScores}
+            />
           ))}
         </div>
       </div>

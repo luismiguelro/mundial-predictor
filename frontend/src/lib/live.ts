@@ -1,4 +1,4 @@
-import type { FixedResults, GroupMatch, LiveMatch, Prediction } from "@/types";
+import type { FixedResults, GroupMatch, GroupStandingEntry, LiveMatch, Prediction } from "@/types";
 
 /**
  * Resultados reales del Mundial 2026.
@@ -273,6 +273,68 @@ export function orientScore(
   const live = liveScores?.get(pairKey(m.team1, m.team2));
   if (!live) return null;
   return live.team1 === m.team1 ? { s1: live.s1, s2: live.s2 } : { s1: live.s2, s2: live.s1 };
+}
+
+/* ── Aciertos de posición: orden previsto del modelo vs orden real ──
+   Una vez que un grupo queda definido (todos sus partidos jugados),
+   comparamos la clasificación final real contra la más probable del
+   modelo, posición por posición. */
+
+/** Posición final esperada (1 = mejor): Σ pos · P(pos). Menor es mejor. */
+function expectedPosition(s: GroupStandingEntry): number {
+  return 1 * s.first + 2 * s.second + 3 * s.third + 4 * s.fourth;
+}
+
+/** Orden previsto por el modelo (de 1° a último) según la posición esperada. */
+export function predictedOrder(standings: GroupStandingEntry[]): string[] {
+  return [...standings]
+    .sort((a, b) => expectedPosition(a) - expectedPosition(b))
+    .map((s) => s.team);
+}
+
+export interface GroupPositionResult {
+  complete: boolean;   // todos los partidos del grupo terminaron
+  order: string[];     // clasificación real (1° → último)
+  correct: number;     // posiciones que coinciden con la predicción
+  total: number;       // equipos del grupo
+}
+
+/** Clasificación real del grupo + nº de posiciones acertadas por el modelo. */
+export function groupPositionResult(
+  matches: GroupMatch[],
+  standings: GroupStandingEntry[],
+  liveScores: ScoreMap
+): GroupPositionResult {
+  const rows = new Map<string, { team: string; pts: number; gd: number; gf: number }>();
+  const ensure = (t: string) => {
+    let r = rows.get(t);
+    if (!r) { r = { team: t, pts: 0, gd: 0, gf: 0 }; rows.set(t, r); }
+    return r;
+  };
+  let played = 0;
+  for (const m of matches) {
+    const r1 = ensure(m.team1), r2 = ensure(m.team2);
+    const s = orientScore(m, liveScores);
+    if (!s) continue;
+    played++;
+    r1.gf += s.s1; r2.gf += s.s2;
+    r1.gd += s.s1 - s.s2; r2.gd += s.s2 - s.s1;
+    if (s.s1 > s.s2) r1.pts += 3;
+    else if (s.s2 > s.s1) r2.pts += 3;
+    else { r1.pts += 1; r2.pts += 1; }
+  }
+  const order = [...rows.values()]
+    .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team))
+    .map((r) => r.team);
+  const complete = matches.length > 0 && played >= matches.length;
+  const predicted = predictedOrder(standings);
+  let correct = 0;
+  if (complete) {
+    for (let i = 0; i < order.length; i++) {
+      if (order[i] === predicted[i]) correct++;
+    }
+  }
+  return { complete, order, correct, total: order.length };
 }
 
 /** Récord global del modelo sobre los partidos de grupos ya jugados. */
