@@ -529,7 +529,7 @@ def main():
                 "goals": int(row["goals"]),
                 "victims": _victims(row["scorer"], row["team"]),
             }
-            for i, row in enumerate(scorer_agg.head(30).to_dict("records"))
+            for i, row in enumerate(scorer_agg.head(100).to_dict("records"))
         ]
         (OUT_DIR / "goalscorers.json").write_text(
             json.dumps(goalscorers_out, ensure_ascii=False, indent=2), encoding="utf-8"

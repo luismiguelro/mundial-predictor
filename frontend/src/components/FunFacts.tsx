@@ -1,22 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { SiteStats, Goalscorer, GoalscorerVictim, QatarBacktest } from "@/types";
+import type { SiteStats, Goalscorer, GoalscorerVictim, QatarBacktest, TeamInfo, LiveMatch } from "@/types";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, ReferenceLine, Cell,
 } from "recharts";
 import { useLang } from "@/lib/i18n";
+import { fetchLiveScorers, mergeScorers, type LiveScorer, type CombinedScorer } from "@/lib/scorers";
+import { augmentStats } from "@/lib/stats";
 
 interface Props {
   stats: SiteStats;
   goalscorers: Goalscorer[];
   qatar?: QatarBacktest | null;
+  teams?: Record<string, TeamInfo>;
+  liveMatches?: LiveMatch[];
 }
 
-export default function FunFacts({ stats, goalscorers, qatar }: Props) {
+export default function FunFacts({ stats: rawStats, goalscorers, qatar, teams, liveMatches }: Props) {
   const T = useLang();
+
+  /* Stats = histórico + lo que va del Mundial 2026 (partidos ya jugados). */
+  const { stats, added: stats2026 } = useMemo(
+    () => augmentStats(rawStats, liveMatches ?? [], teams ?? {}),
+    [rawStats, liveMatches, teams]
+  );
+
+  /* Goleadores del Mundial 2026 en vivo (openfootball). Carga diferida:
+     solo se pide al abrir la pestaña Stats. */
+  const [liveScorers, setLiveScorers] = useState<LiveScorer[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchLiveScorers().then((s) => { if (alive) setLiveScorers(s); });
+    return () => { alive = false; };
+  }, []);
+
+  /* Ranking combinado: histórico (hasta 2022) + goles del Mundial 2026 en vivo,
+     emparejando por nombre normalizado. Mientras carga el live, muestra solo
+     el histórico (goals2026 = 0) y se reordena solo al llegar los datos. */
+  const combinedScorers = useMemo(
+    () => mergeScorers(goalscorers, liveScorers ?? [], (team) => teams?.[team]?.flag ?? "🏳️")
+      .filter((s) => s.goals >= 6), // goleadores con 6+ goles totales
+    [goalscorers, liveScorers, teams]
+  );
+  const live2026Count = liveScorers?.reduce((n, s) => n + s.goals, 0) ?? 0;
   const {
     total_matches, total_goals, avg_goals_all, n_editions,
     highest_scoring_match, biggest_victory,
@@ -28,6 +57,18 @@ export default function FunFacts({ stats, goalscorers, qatar }: Props) {
 
   return (
     <div className="space-y-10">
+      {/* indicador: las stats incluyen lo que va del Mundial 2026 */}
+      {stats2026 > 0 && (
+        <div
+          className="flex items-center gap-2 text-xs rounded-md px-3 py-2"
+          style={{ background: "rgba(207,10,44,0.06)", border: "1px solid rgba(207,10,44,0.25)" }}
+        >
+          <span className="live-dot" />
+          <span className="font-bold">{T.statsLiveTag}</span>
+          <span className="text-[var(--text-muted)]">· +{stats2026} {T.statsLiveMatches}</span>
+        </div>
+      )}
+
       {/* ── KPIs ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -115,9 +156,13 @@ export default function FunFacts({ stats, goalscorers, qatar }: Props) {
         </p>
       </div>
 
-      {/* ── Individual top scorers ── */}
-      {goalscorers.length > 0 && (
-        <GoalscorersTable goalscorers={goalscorers} />
+      {/* ── Máximos goleadores: histórico + Mundial 2026 en vivo, combinados ── */}
+      {combinedScorers.length > 0 && (
+        <GoalscorersTable
+          goalscorers={combinedScorers}
+          live2026Count={live2026Count}
+          liveLoaded={liveScorers !== null}
+        />
       )}
 
       {/* ── Top scoring teams ── */}
@@ -253,26 +298,37 @@ function QatarSection({ qatar }: { qatar: QatarBacktest }) {
 }
 
 /* ══════════════════════════════════════════════════════
-   TABLA DE GOLEADORES
+   TABLA DE GOLEADORES — histórico + Mundial 2026 combinados
 ══════════════════════════════════════════════════════ */
-function GoalscorersTable({ goalscorers }: { goalscorers: Goalscorer[] }) {
+function GoalscorersTable({ goalscorers, live2026Count, liveLoaded }: {
+  goalscorers: CombinedScorer[];
+  live2026Count: number;
+  liveLoaded: boolean;
+}) {
   const T = useLang();
-  const [hovered,  setHovered]  = useState<Goalscorer | null>(null);
-  const [selected, setSelected] = useState<Goalscorer | null>(null);
+  const [hovered,  setHovered]  = useState<CombinedScorer | null>(null);
+  const [selected, setSelected] = useState<CombinedScorer | null>(null);
+  /* En desktop manda el hover; en táctil (sin hover) se selecciona al tocar. */
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    setIsTouch(window.matchMedia?.("(hover: none)").matches ?? false);
+  }, []);
 
-  const active   = selected ?? hovered;
-  const isPinned = selected !== null;
+  const active   = isTouch ? selected : hovered;
   const maxGoals = goalscorers[0]?.goals ?? 1;
-
-  function handleRowClick(g: Goalscorer) {
-    setSelected((prev) => (prev?.rank === g.rank ? null : g));
-  }
 
   return (
     <div className="stat-card">
-      <h3 className="font-bold mb-1">{T.topScorersTableTitle}</h3>
+      <div className="flex items-baseline justify-between gap-2 flex-wrap mb-1">
+        <h3 className="font-bold">{T.topScorersTableTitle}</h3>
+        {liveLoaded && live2026Count > 0 && (
+          <span className="flex items-center gap-1.5 text-xs font-bold" style={{ color: "var(--wc-gold)" }}>
+            <span className="live-dot" /> +{live2026Count} {T.liveScorers2026Sub}
+          </span>
+        )}
+      </div>
       <p className="text-xs text-[var(--text-muted)] mb-4">
-        {T.topScorersSubtitle}
+        {T.topScorersCombinedSub}
         <span
           className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-mono"
           style={{
@@ -286,8 +342,8 @@ function GoalscorersTable({ goalscorers }: { goalscorers: Goalscorer[] }) {
       </p>
 
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* Tabla */}
-        <div className="overflow-x-auto flex-1">
+        {/* Tabla: tope visible ~15 filas, el resto con scroll · header fijo */}
+        <div className="flex-1 scorers-scroll" style={{ maxHeight: "30rem", overflow: "auto" }}>
           <table onMouseLeave={() => setHovered(null)} style={{ tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: 36 }} />
@@ -305,45 +361,42 @@ function GoalscorersTable({ goalscorers }: { goalscorers: Goalscorer[] }) {
             </thead>
             <tbody>
               {goalscorers.map((g) => {
-                const isHovered  = hovered?.rank  === g.rank;
-                const isSelected = selected?.rank === g.rank;
-                const isActive   = isHovered || isSelected;
+                const isActive = active?.rank === g.rank;
                 const medal = g.rank === 1 ? "🥇" : g.rank === 2 ? "🥈" : g.rank === 3 ? "🥉" : null;
 
                 return (
                   <tr
                     key={g.rank}
-                    onMouseEnter={() => setHovered(g)}
-                    onClick={() => handleRowClick(g)}
+                    onMouseEnter={() => { if (!isTouch) setHovered(g); }}
+                    onClick={() => { if (isTouch) setSelected((p) => (p?.rank === g.rank ? null : g)); }}
                     className="transition-colors duration-100"
                     style={{
-                      cursor: "pointer",
-                      background: isSelected
-                        ? "rgba(212,168,67,0.14)"
-                        : isHovered
-                        ? "rgba(212,168,67,0.07)"
+                      cursor: isTouch ? "pointer" : "default",
+                      background: isActive
+                        ? "rgba(212,168,67,0.12)"
                         : g.rank <= 3
                         ? "rgba(234,179,8,0.03)"
                         : "transparent",
-                      boxShadow: isSelected
-                        ? "inset 2px 0 0 rgba(212,168,67,0.8)"
-                        : isHovered
-                        ? "inset 2px 0 0 rgba(212,168,67,0.35)"
-                        : "none",
+                      boxShadow: isActive ? "inset 2px 0 0 rgba(212,168,67,0.7)" : "none",
                     }}
                   >
                     <td className="font-mono text-xs" style={{ color: "var(--text-muted, #9898BB)" }}>
                       {medal ?? g.rank}
                     </td>
                     <td>
-                      <div className="flex items-center gap-1.5">
-                        {isSelected && <span className="text-[10px]" title={T.pinnedLabel}>📌</span>}
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span
                           className="font-semibold text-sm"
                           style={{ color: isActive ? "var(--color-wc-gold, #D4A843)" : "var(--text, #F0F0FF)", transition: "color 0.12s" }}
                         >
                           {g.scorer}
                         </span>
+                        {g.goals2026 > 0 && (
+                          <span
+                            className="live-dot shrink-0"
+                            title={`+${g.goals2026} ${T.liveScorers2026Sub}`}
+                          />
+                        )}
                       </div>
                     </td>
                     <td className="text-sm" style={{ color: "var(--text-muted, #9898BB)" }}>
@@ -388,31 +441,19 @@ function GoalscorersTable({ goalscorers }: { goalscorers: Goalscorer[] }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                className="rounded-xl p-4"
+                className="rounded-xl p-4 lg:sticky lg:top-[120px]"
                 style={{
                   background: "var(--color-arena-elevated, #161628)",
-                  border: isPinned ? "1px solid rgba(212,168,67,0.40)" : "1px solid rgba(212,168,67,0.18)",
-                  boxShadow: isPinned
-                    ? "0 0 24px rgba(212,168,67,0.12), 0 8px 32px rgba(0,0,0,0.4)"
-                    : "0 8px 32px rgba(0,0,0,0.4)",
+                  border: "1px solid rgba(212,168,67,0.18)",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
                 }}
               >
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-xl">{active.flag}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-bold text-sm leading-tight truncate" style={{ color: "var(--color-ink-primary, #F0F0FF)" }}>
-                        {active.scorer}
-                      </p>
-                      {isPinned && (
-                        <span
-                          className="text-[9px] px-1.5 py-0.5 rounded-full font-mono shrink-0"
-                          style={{ background: "rgba(212,168,67,0.15)", color: "var(--color-wc-gold, #D4A843)", border: "1px solid rgba(212,168,67,0.30)" }}
-                        >
-                          {T.pinnedLabel}
-                        </span>
-                      )}
-                    </div>
+                    <p className="font-bold text-sm leading-tight truncate" style={{ color: "var(--color-ink-primary, #F0F0FF)" }}>
+                      {active.scorer}
+                    </p>
                     <p className="text-[10px] font-mono" style={{ color: "var(--color-ink-muted, #4A4A6A)" }}>
                       {active.goals} {T.goalsInFinalStage}
                     </p>
@@ -443,7 +484,7 @@ function GoalscorersTable({ goalscorers }: { goalscorers: Goalscorer[] }) {
                   </div>
                 )}
 
-                {isPinned && (
+                {isTouch && (
                   <button
                     onClick={() => setSelected(null)}
                     className="mt-3 w-full text-[10px] font-mono py-1 rounded-lg transition-colors"
@@ -457,28 +498,16 @@ function GoalscorersTable({ goalscorers }: { goalscorers: Goalscorer[] }) {
                   </button>
                 )}
               </motion.div>
-            ) : (
-              <motion.div
-                key="idle"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="hidden lg:flex flex-col items-center justify-center gap-2 min-h-36 rounded-xl"
-                style={{ background: "var(--color-arena-elevated, #161628)", border: "1px dashed rgba(255,255,255,0.07)" }}
-              >
-                <span className="text-2xl opacity-30">⚽</span>
-                <p
-                  className="text-xs text-center px-4 leading-relaxed"
-                  style={{ color: "var(--color-ink-muted, #4A4A6A)", fontFamily: "var(--font-mono, monospace)" }}
-                >
-                  {T.idleScorersHint}
-                </p>
-              </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
         </div>
       </div>
+
+      {liveLoaded && live2026Count > 0 && (
+        <p className="text-xs text-[var(--text-muted)] mt-4 border-t border-[var(--border-subtle)] pt-2">
+          {T.liveScorers2026Note}
+        </p>
+      )}
     </div>
   );
 }
