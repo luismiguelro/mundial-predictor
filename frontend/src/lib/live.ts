@@ -29,7 +29,7 @@ const NAME_MAP: Record<string, string> = {
   "IR Iran": "Iran",
 };
 
-function normalizeName(raw: unknown): string {
+export function normalizeName(raw: unknown): string {
   const name =
     typeof raw === "string"
       ? raw

@@ -19,29 +19,50 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-06-17-goleadores",
+    date: "2026-06-17",
+    tag: "new",
+    title: {
+      es: "Estadísticas y goleadores en vivo",
+      en: "Live stats and scorers",
+      pt: "Estatísticas e artilheiros ao vivo",
+    },
+    items: {
+      es: [
+        "Las estadísticas y los goleadores ahora se actualizan con el Mundial 2026 en marcha.",
+        "Mejoras visuales en las tablas.",
+      ],
+      en: [
+        "Stats and top scorers now update as the 2026 World Cup unfolds.",
+        "Visual improvements across the tables.",
+      ],
+      pt: [
+        "As estatísticas e os artilheiros agora se atualizam com a Copa 2026 em andamento.",
+        "Melhorias visuais nas tabelas.",
+      ],
+    },
+  },
+  {
     id: "2026-06-16",
     date: "2026-06-16",
     tag: "new",
     title: {
-      es: "Novedades, vista por jornadas y aciertos de posición",
-      en: "What's new, matchday view and position hits",
-      pt: "Novidades, visão por rodada e acertos de posição",
+      es: "Novedades y fase de grupos más clara",
+      en: "What's new and a clearer group stage",
+      pt: "Novidades e fase de grupos mais clara",
     },
     items: {
       es: [
-        "Añadimos esta campanita de NOVEDADES con el registro de cambios.",
-        "La fase de grupos ahora se divide por jornadas para que sea más fácil de leer.",
-        "Cuando un grupo queda definido, mostramos cuántas posiciones acertó el modelo.",
+        "Nueva sección de novedades en la cabecera.",
+        "La fase de grupos es más fácil de seguir y muestra los aciertos del modelo.",
       ],
       en: [
-        "Added this NEWS bell with the changelog.",
-        "The group stage is now split by matchday for easier reading.",
-        "When a group is decided, we show how many positions the model got right.",
+        "New what's-new section in the header.",
+        "The group stage is easier to follow and shows the model's hits.",
       ],
       pt: [
-        "Adicionamos este sino de NOVIDADES com o registro de alterações.",
-        "A fase de grupos agora é dividida por rodadas para facilitar a leitura.",
-        "Quando um grupo é definido, mostramos quantas posições o modelo acertou.",
+        "Nova seção de novidades no cabeçalho.",
+        "A fase de grupos ficou mais fácil de acompanhar e mostra os acertos do modelo.",
       ],
     },
   },
@@ -50,49 +71,19 @@ export const CHANGELOG: ChangeEntry[] = [
     date: "2026-06-15",
     tag: "improve",
     title: {
-      es: "Simulador más realista y xG en la interfaz",
-      en: "More realistic simulator and xG in the UI",
-      pt: "Simulador mais realista e xG na interface",
+      es: "Predicciones y simulador mejorados",
+      en: "Better predictions and simulator",
+      pt: "Previsões e simulador melhorados",
     },
     items: {
       es: [
-        "Simulador de torneo recalibrado para resultados más creíbles.",
-        "Goles esperados (xG) y marcador más probable visibles en el predictor.",
-        "Indicador de la calidad del modelo.",
+        "Resultados más realistas y más detalle en el predictor.",
       ],
       en: [
-        "Tournament simulator recalibrated for more believable results.",
-        "Expected goals (xG) and most likely score shown in the predictor.",
-        "Model quality indicator.",
+        "More realistic results and extra detail in the predictor.",
       ],
       pt: [
-        "Simulador de torneio recalibrado para resultados mais críveis.",
-        "Gols esperados (xG) e placar mais provável no preditor.",
-        "Indicador da qualidade do modelo.",
-      ],
-    },
-  },
-  {
-    id: "2026-06-14",
-    date: "2026-06-14",
-    tag: "improve",
-    title: {
-      es: "Nuevo modelo Dixon-Coles",
-      en: "New Dixon-Coles model",
-      pt: "Novo modelo Dixon-Coles",
-    },
-    items: {
-      es: [
-        "Empates realistas y marcadores coherentes con las probabilidades 1X2.",
-        "Se acabó el eterno 1-0: los marcadores ahora reflejan el partido real.",
-      ],
-      en: [
-        "Realistic draws and scores consistent with the 1X2 probabilities.",
-        "No more endless 1-0: scorelines now reflect the real match.",
-      ],
-      pt: [
-        "Empates realistas e placares coerentes com as probabilidades 1X2.",
-        "Fim do eterno 1-0: os placares agora refletem o jogo real.",
+        "Resultados mais realistas e mais detalhe no preditor.",
       ],
     },
   },
@@ -101,22 +92,19 @@ export const CHANGELOG: ChangeEntry[] = [
     date: "2026-06-13",
     tag: "new",
     title: {
-      es: "Marcador en vivo y hora local",
-      en: "Live score and local time",
-      pt: "Placar ao vivo e horário local",
+      es: "Resultados en vivo y hora local",
+      en: "Live results and local time",
+      pt: "Resultados ao vivo e horário local",
     },
     items: {
       es: [
-        "Marcador en directo y estado «En juego» durante los partidos.",
-        "Los próximos partidos se muestran en tu hora local.",
+        "Sigue los partidos en directo, con los horarios en tu zona.",
       ],
       en: [
-        "Live score and «In play» status during matches.",
-        "Upcoming matches now shown in your local time.",
+        "Follow matches live, with kickoff times in your zone.",
       ],
       pt: [
-        "Placar ao vivo e status «Em andamento» durante os jogos.",
-        "Os próximos jogos aparecem no seu horário local.",
+        "Acompanhe os jogos ao vivo, com os horários no seu fuso.",
       ],
     },
   },

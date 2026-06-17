@@ -232,8 +232,6 @@ export default function Home() {
 
             {/* Controles derechos */}
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              {/* Novedades / registro de cambios */}
-              <Changelog lang={lang} />
               {/* Idioma */}
               <div style={{ display: "flex", gap: "2px" }}>
                 {(["es", "en", "pt"] as Lang[]).map((l) => (
@@ -257,6 +255,9 @@ export default function Home() {
                   {S.weAre26}
                 </span>
               </div>
+              {/* Novedades / registro de cambios — último control para que el
+                  panel (right:0) nunca se desborde en móvil */}
+              <Changelog lang={lang} />
             </div>
           </div>
         </nav>
@@ -347,7 +348,7 @@ export default function Home() {
               )}
               {tab === "curiosidades" && stats && (
                 <TabPane key="curiosidades">
-                  <FunFacts stats={stats} goalscorers={goalscorers} qatar={qatar} />
+                  <FunFacts stats={stats} goalscorers={goalscorers} qatar={qatar} teams={teams ?? undefined} liveMatches={liveMatches} />
                 </TabPane>
               )}
               {tab === "glosario" && (
