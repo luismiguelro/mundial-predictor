@@ -108,6 +108,16 @@ function getWinnerKey(pred: Prediction): "home" | "draw" | "away" {
   return "draw";
 }
 
+/**
+ * Partido "parejo": el empate está a ≤6 puntos del favorito, así que no hay
+ * favorito claro y el empate es casi tan probable como una victoria. No cambia
+ * la etiqueta del modelo (sigue siendo argmax), solo comunica la incertidumbre.
+ */
+function isTightMatch(pred: Prediction): boolean {
+  const topWin = Math.max(pred.home_win, pred.away_win);
+  return topWin - pred.draw <= 0.06;
+}
+
 interface Props {
   teams: Record<string, TeamInfo>;
   predictions: Record<string, Prediction>;
@@ -191,6 +201,7 @@ export default function Predictor({ teams, predictions, matches, liveMatches }: 
   const homeColor = getTeamColor(home);
   const awayColor = getTeamColor(away);
   const winnerKey = getWinnerKey(pred);
+  const tight     = isTightMatch(pred);
 
   const donutData = [
     { name: `${homeInfo?.flag ?? ""} ${home}`, value: +(pred.home_win * 100).toFixed(1), fill: homeColor },
@@ -372,6 +383,7 @@ export default function Predictor({ teams, predictions, matches, liveMatches }: 
                   awayColor={awayColor}
                   winnerKey={winnerKey}
                   donutData={donutData}
+                  tight={tight}
                 />
               ) : (
                 <IdleHint key="idle" />
@@ -767,7 +779,7 @@ function ScannerLoader({ homeFlag, awayFlag }: { homeFlag?: string; awayFlag?: s
 
 function ResultsZone({
   pred, home, away, homeInfo, awayInfo,
-  homeColor, awayColor, winnerKey, donutData,
+  homeColor, awayColor, winnerKey, donutData, tight,
 }: {
   pred: Prediction;
   home: string; away: string;
@@ -775,6 +787,7 @@ function ResultsZone({
   homeColor: string; awayColor: string;
   winnerKey: "home" | "draw" | "away";
   donutData: { name: string; value: number; fill: string }[];
+  tight: boolean;
 }) {
   const T = useLang();
   return (
@@ -785,6 +798,37 @@ function ResultsZone({
       transition={{ duration: 0.35 }}
       className="space-y-6"
     >
+      {/* Sello de partido parejo: el empate es casi tan probable como ganar */}
+      {tight && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5"
+          style={{
+            background: "rgba(119,119,153,0.12)",
+            border: "1px solid rgba(119,119,153,0.30)",
+          }}
+          title={T.tightMatchNote}
+        >
+          <span className="text-lg leading-none">🟰</span>
+          <div className="flex flex-col">
+            <span
+              className="text-xs font-semibold tracking-wide"
+              style={{ fontFamily: "var(--font-heading)", color: "var(--color-ink-primary)" }}
+            >
+              {T.tightMatch}
+            </span>
+            <span
+              className="text-[10px] leading-tight mt-0.5"
+              style={{ fontFamily: "var(--font-body)", color: "var(--color-ink-muted)" }}
+            >
+              {T.tightMatchNote}
+            </span>
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Donut chart */}
         <div

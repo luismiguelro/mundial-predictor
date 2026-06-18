@@ -19,6 +19,27 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-06-17-parejo",
+    date: "2026-06-17",
+    tag: "new",
+    title: {
+      es: "Aviso de partido parejo",
+      en: "Tight-match flag",
+      pt: "Aviso de jogo equilibrado",
+    },
+    items: {
+      es: [
+        "Cuando ninguna selección es favorita clara, el predictor marca el partido como parejo y avisa que el empate es casi tan probable como una victoria.",
+      ],
+      en: [
+        "When there's no clear favourite, the predictor flags the match as tight and warns that a draw is almost as likely as a win.",
+      ],
+      pt: [
+        "Quando não há favorito claro, o preditor marca o jogo como equilibrado e avisa que o empate é quase tão provável quanto uma vitória.",
+      ],
+    },
+  },
+  {
     id: "2026-06-17-goleadores",
     date: "2026-06-17",
     tag: "new",
