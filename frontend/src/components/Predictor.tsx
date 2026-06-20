@@ -103,6 +103,8 @@ function getPrediction(
 }
 
 function getWinnerKey(pred: Prediction): "home" | "draw" | "away" {
+  // Muy parejo: equipos a la par y empate competitivo (ej. 36/35/36) → se da por empate
+  if (isTightMatch(pred) && Math.abs(pred.home_win - pred.away_win) <= 0.06) return "draw";
   if (pred.home_win >= pred.draw && pred.home_win >= pred.away_win) return "home";
   if (pred.away_win >= pred.draw && pred.away_win >= pred.home_win) return "away";
   return "draw";
@@ -110,8 +112,7 @@ function getWinnerKey(pred: Prediction): "home" | "draw" | "away" {
 
 /**
  * Partido "parejo": el empate está a ≤6 puntos del favorito, así que no hay
- * favorito claro y el empate es casi tan probable como una victoria. No cambia
- * la etiqueta del modelo (sigue siendo argmax), solo comunica la incertidumbre.
+ * favorito claro y el empate es casi tan probable como una victoria.
  */
 function isTightMatch(pred: Prediction): boolean {
   const topWin = Math.max(pred.home_win, pred.away_win);

@@ -1,5 +1,5 @@
 import type { FixedResults, Prediction, SimResult, TeamInfo } from "@/types";
-import type { ScoreMap } from "@/lib/live";
+import type { MatchState, ScoreMap, StandingRow } from "@/lib/live";
 import { pairKey } from "@/lib/live";
 
 type Probs = { home_win: number; draw: number; away_win: number };
@@ -319,4 +319,222 @@ export function runMonteCarlo(
       champion: counts[team].champion / n,
     }))
     .sort((a, b) => b.champion - a.champion);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   PROYECCIÓN EN VIVO DEL CUADRO (determinista, no Monte Carlo)
+   A partir de las posiciones REALES actuales de cada grupo,
+   resuelve quién caería en cada cruce de dieciseisavos (R32).
+   Los 1.º/2.º se proyectan en cuanto el grupo arranca (provisional
+   hasta que cierra); los terceros solo se ubican cuando los 12
+   grupos terminaron, porque su ranking es cruzado entre grupos.
+────────────────────────────────────────────────────────────── */
+export interface ProjSlot {
+  /** Equipo proyectado, o null si la posición aún no es determinable. */
+  team: string | null;
+  /** Etiqueta de respaldo cuando no hay equipo: "1A", "2B", "3.º A·B·C". */
+  label: string;
+  /** true si la posición ya es definitiva (grupo cerrado / terceros fijados). */
+  decided: boolean;
+}
+export interface ProjCross {
+  num: number;
+  a: ProjSlot;
+  b: ProjSlot;
+  /** Nº del partido de octavos al que avanza el ganador (o null). */
+  nextNum: number | null;
+}
+
+const POS_LABEL = ["1", "2", "3", "4"];
+
+export function projectBracket(
+  bracket: Bracket,
+  standings: Record<string, StandingRow[]>
+): ProjCross[] {
+  const started: Record<string, boolean> = {};
+  const complete: Record<string, boolean> = {};
+  const order: Record<string, string[]> = {};
+  for (const [g, rows] of Object.entries(standings)) {
+    started[g] = rows.some((r) => r.played > 0);
+    complete[g] = rows.length > 0 && rows.every((r) => r.played >= 3);
+    order[g] = rows.map((r) => r.team);
+  }
+  const allComplete =
+    Object.keys(complete).length >= 12 && Object.values(complete).every(Boolean);
+
+  // Terceros: solo se ubican cuando TODOS los grupos cerraron (ranking cruzado).
+  let thirdAssign: Record<string, string> = {};
+  if (allComplete) {
+    const thirds = Object.entries(standings)
+      .map(([g, rows]) => ({ g, r: rows[2] }))
+      .filter((x) => x.r)
+      .map((x) => ({ team: x.r.team, group: x.g, pts: x.r.points, gd: x.r.gd, gf: x.r.gf }));
+    thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team));
+    const top8 = thirds.slice(0, 8).map((t) => ({ team: t.team, group: t.group }));
+    const thirdSlots: { num: number; side: "a" | "b"; groups: string[] }[] = [];
+    for (const c of bracket.r32) {
+      if (c.a.type === "third") thirdSlots.push({ num: c.num, side: "a", groups: c.a.groups });
+      if (c.b.type === "third") thirdSlots.push({ num: c.num, side: "b", groups: c.b.groups });
+    }
+    thirdAssign = matchThirds(thirdSlots, top8);
+  }
+
+  const resolve = (slot: Slot, num: number, side: "a" | "b"): ProjSlot => {
+    if (slot.type === "pos") {
+      const team = started[slot.group] ? (order[slot.group]?.[slot.pos] ?? null) : null;
+      return { team, label: `${POS_LABEL[slot.pos]}${slot.group}`, decided: !!complete[slot.group] };
+    }
+    if (slot.type === "third") {
+      return {
+        team: thirdAssign[`${num}:${side}`] ?? null,
+        label: `3.º ${slot.groups.join("·")}`,
+        decided: allComplete,
+      };
+    }
+    return { team: slot.value, label: slot.value, decided: true };
+  };
+
+  // A qué partido de octavos avanza el ganador de cada cruce de R32
+  const advances: Record<number, number> = {};
+  for (const c of bracket.ko) {
+    const am = /^W(\d+)$/.exec(c.a); if (am) advances[+am[1]] = c.num;
+    const bm = /^W(\d+)$/.exec(c.b); if (bm) advances[+bm[1]] = c.num;
+  }
+
+  return bracket.r32.map((c) => ({
+    num: c.num,
+    a: resolve(c.a, c.num, "a"),
+    b: resolve(c.b, c.num, "b"),
+    nextNum: advances[c.num] ?? null,
+  }));
+}
+
+/* ──────────────────────────────────────────────────────────────
+   CUADRO ELIMINATORIO EN VIVO (R32 → Final)
+   Ubica cada equipo según su puesto en la tabla real y avanza únicamente
+   con resultados reales (sin predecir): el cuadro se va llenando como en la
+   web de la BBC. La predicción de cada cruce queda para una fase posterior.
+────────────────────────────────────────────────────────────── */
+
+export type KoRoundKey = "r32" | "r16" | "qf" | "sf" | "final";
+
+export interface BracketSlotLive {
+  team: string | null;
+  label: string;       // placeholder legible si no hay equipo ("1A", "Ganador 73"…)
+  /** equipo definitivo (clasificó de verdad / ganó un partido real) */
+  decided: boolean;
+  /** equipo presente pero aún provisional (posición en vivo o ganador previsto) */
+  provisional: boolean;
+}
+
+export interface BracketCrossLive {
+  num: number;
+  round: KoRoundKey;
+  a: BracketSlotLive;
+  b: BracketSlotLive;
+  /** partido ya disputado (resultado real disponible) */
+  played: boolean;
+  state: MatchState | null;
+  /** ganador REAL que avanza, o null si aún no se jugó / faltan rivales */
+  winner: string | null;
+}
+
+export interface LiveBracketData {
+  rounds: { key: KoRoundKey; crosses: BracketCrossLive[] }[];
+  champion: string | null;
+}
+
+const KO_ROUND_OF = (num: number): KoRoundKey =>
+  num <= 96 ? "r16" : num <= 100 ? "qf" : num <= 102 ? "sf" : "final";
+
+/**
+ * Cuadro eliminatorio en vivo (R32 → Final): ubica los equipos según la tabla
+ * real (1.º/2.º provisionales hasta cerrar el grupo; mejores 8 terceros al
+ * terminar los 12 grupos) y avanza SOLO con resultados reales — sin predecir.
+ */
+export function buildLiveBracket(
+  bracket: Bracket,
+  standings: Record<string, StandingRow[]>,
+  states: Map<string, MatchState>
+): LiveBracketData {
+  const r32 = projectBracket(bracket, standings);
+
+  const winByNum: Record<number, string> = {};
+  const realByNum: Record<number, boolean> = {};
+  const crossByRound: Record<KoRoundKey, BracketCrossLive[]> = {
+    r32: [], r16: [], qf: [], sf: [], final: [],
+  };
+
+  const resolveCross = (
+    num: number, round: KoRoundKey, a: BracketSlotLive, b: BracketSlotLive
+  ): BracketCrossLive => {
+    const state = a.team && b.team ? states.get(pairKey(a.team, b.team)) ?? null : null;
+    const played = !!state && state.s1 !== null && state.s2 !== null;
+    const winner = state?.winner ?? null;       // solo resultado real
+    if (winner) { winByNum[num] = winner; realByNum[num] = true; }
+    return { num, round, a, b, played, state, winner };
+  };
+
+  // R32: slots desde la tabla real (provisional hasta que cierre el grupo)
+  for (const c of r32) {
+    const slot = (s: typeof c.a): BracketSlotLive => ({
+      team: s.team, label: s.label, decided: s.decided, provisional: !!s.team && !s.decided,
+    });
+    crossByRound.r32.push(resolveCross(c.num, "r32", slot(c.a), slot(c.b)));
+  }
+
+  // R16 → Final: cada lado es el ganador REAL de un cruce anterior (o "Por definir").
+  // De paso mapeamos el árbol (qué cruce alimenta a cuál) para ordenar las rondas
+  // de forma PLANAR — los rivales reales quedan adyacentes y los conectores cuadran.
+  const koSorted = [...bracket.ko].sort((x, y) => x.num - y.num);
+  const childrenOf: Record<number, [number, number]> = {};
+  const parentOf: Record<number, number> = {};
+  for (const c of koSorted) {
+    const ca = parseInt(c.a.slice(1), 10);
+    const cb = parseInt(c.b.slice(1), 10);
+    childrenOf[c.num] = [ca, cb];
+    parentOf[ca] = c.num; parentOf[cb] = c.num;
+    const ref = (n: number): BracketSlotLive => {
+      const team = winByNum[n] ?? null;
+      return { team, label: `W${n}`, decided: !!realByNum[n], provisional: false };
+    };
+    crossByRound[KO_ROUND_OF(c.num)].push(resolveCross(c.num, KO_ROUND_OF(c.num), ref(ca), ref(cb)));
+  }
+
+  // La final es el único cruce sin padre; recorremos el árbol para fijar el orden
+  const finalNum = koSorted.length
+    ? koSorted.map((c) => c.num).find((n) => parentOf[n] === undefined) ?? koSorted[koSorted.length - 1].num
+    : 0;
+  const leafOrder: number[] = [];
+  const dfs = (n: number) => {
+    const ch = childrenOf[n];
+    if (!ch) { leafOrder.push(n); return; }
+    dfs(ch[0]); dfs(ch[1]);
+  };
+  if (finalNum) dfs(finalNum);
+
+  // Orden por ronda: las hojas (R32) en orden planar, y cada ronda siguiente
+  // = los padres de la ronda previa, sin repetir (conserva la adyacencia).
+  const roundOrder: Record<KoRoundKey, number[]> = { r32: leafOrder, r16: [], qf: [], sf: [], final: [] };
+  let cur = leafOrder;
+  for (const key of ["r16", "qf", "sf", "final"] as KoRoundKey[]) {
+    const nxt: number[] = [];
+    for (const n of cur) {
+      const p = parentOf[n];
+      if (p !== undefined && !nxt.includes(p)) nxt.push(p);
+    }
+    roundOrder[key] = nxt;
+    cur = nxt;
+  }
+
+  const rank = (key: KoRoundKey, num: number) => {
+    const i = roundOrder[key].indexOf(num);
+    return i === -1 ? num : i;
+  };
+  const rounds = (["r32", "r16", "qf", "sf", "final"] as KoRoundKey[]).map((key) => ({
+    key,
+    crosses: crossByRound[key].sort((x, y) => rank(key, x.num) - rank(key, y.num)),
+  }));
+
+  return { rounds, champion: winByNum[finalNum] ?? null };
 }

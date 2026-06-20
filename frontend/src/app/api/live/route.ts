@@ -23,7 +23,11 @@ interface FdMatch {
   utcDate: string | null;
   homeTeam: FdTeam | null;
   awayTeam: FdTeam | null;
-  score: { fullTime: { home: number | null; away: number | null } } | null;
+  score: {
+    fullTime: { home: number | null; away: number | null };
+    /** HOME_TEAM | AWAY_TEAM | DRAW — refleja al ganador real, incluso por penales */
+    winner?: string | null;
+  } | null;
 }
 
 /** "GROUP_A" → "Group A" (formato que ya usa el resto de la app) */
@@ -52,9 +56,17 @@ export async function GET() {
     // un score no-nulo como resultado final (veredictos, simulador).
     const finished = m.status === "FINISHED";
     const inPlay = m.status === "IN_PLAY" || m.status === "PAUSED";
+    const home = m.homeTeam?.name ?? "";
+    const away = m.awayTeam?.name ?? "";
+    // ganador real del cruce (incluye desempate por penales): necesario para
+    // resolver el cuadro eliminatorio dinámicamente cuando el marcador es empate
+    const w = m.score?.winner;
+    const winner = finished
+      ? (w === "HOME_TEAM" ? home : w === "AWAY_TEAM" ? away : null)
+      : null;
     return {
-      team1: m.homeTeam?.name ?? "",
-      team2: m.awayTeam?.name ?? "",
+      team1: home,
+      team2: away,
       score1: finished ? (m.score?.fullTime?.home ?? null) : null,
       score2: finished ? (m.score?.fullTime?.away ?? null) : null,
       // marcador en curso, aparte: solo para la tarjeta "En juego"
@@ -64,6 +76,7 @@ export async function GET() {
       round: m.stage ?? undefined,
       utcDate: m.utcDate ?? null,
       status: m.status,
+      winner,
     };
   });
 

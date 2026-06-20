@@ -8,8 +8,8 @@ import type {
 } from "@/types";
 import { LangContext, type Lang } from "@/lib/i18n";
 import {
-  buildFixedResults, buildLiveStats, buildScoreMap, buildVerdicts,
-  fetchLiveMatches, type LiveStats, type ScoreMap,
+  buildFixedResults, buildGroupProbIndex, buildLiveStats, buildScoreMap, buildVerdicts,
+  fetchLiveMatches, fetchStandings, type LiveStats, type ScoreMap, type StandingRow,
 } from "@/lib/live";
 import Predictor      from "@/components/Predictor";
 import SimulatorTab   from "@/components/Simulator";
@@ -129,6 +129,7 @@ export default function Home() {
   const [groupMatches,   setGroupMatches]   = useState<Record<string, GroupMatch[]> | null>(null);
   const [groupStandings, setGroupStandings] = useState<Record<string, GroupStandingEntry[]> | null>(null);
   const [liveMatches,    setLiveMatches]    = useState<LiveMatch[]>([]);
+  const [apiStandings,   setApiStandings]   = useState<Record<string, StandingRow[]> | null>(null);
   const [qatar,          setQatar]          = useState<QatarBacktest | null>(null);
   const [bracket,        setBracket]        = useState<Bracket | null>(null);
   const [loading,        setLoading]        = useState(true);
@@ -146,6 +147,18 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  /* Tabla de posiciones oficial (desempates reales: GD, fair play, etc.).
+     Solo cambia al terminar un partido, así que la traemos al cargar y cada vez
+     que aumenta el nº de partidos finalizados — no en un intervalo fijo.
+     Si no hay token cae a null y la UI calcula desde los marcadores. */
+  const finishedCount = useMemo(
+    () => liveMatches.filter((m) => m.score1 !== null && m.score2 !== null).length,
+    [liveMatches]
+  );
+  useEffect(() => {
+    fetchStandings().then(setApiStandings);
+  }, [finishedCount]);
+
   /* Zona horaria del visitante por IP (Vercel). Si falla o es local,
      queda null y los horarios usan la zona del sistema operativo. */
   useEffect(() => {
@@ -158,10 +171,16 @@ export default function Home() {
   const fixedResults = useMemo(() => buildFixedResults(liveMatches), [liveMatches]);
   const liveScores   = useMemo(() => buildScoreMap(liveMatches), [liveMatches]);
   const liveStats    = useMemo(() => buildLiveStats(liveMatches), [liveMatches]);
+  /* Probabilidades de grupo (mismas que la pestaña Grupos) para que los aciertos
+     coincidan en ambas vistas; el knockout usa las predicciones neutrales. */
+  const groupProbIndex = useMemo(
+    () => (groupMatches ? buildGroupProbIndex(groupMatches) : undefined),
+    [groupMatches]
+  );
   /* Modelo vs Realidad: un solo cálculo para el hero y la pestaña En Vivo */
   const verdicts     = useMemo(
-    () => (predictions ? buildVerdicts(liveMatches, predictions) : []),
-    [liveMatches, predictions]
+    () => (predictions ? buildVerdicts(liveMatches, predictions, groupProbIndex) : []),
+    [liveMatches, predictions, groupProbIndex]
   );
   const record       = useMemo(
     () => ({ played: verdicts.length, hits: verdicts.filter((v) => v.hit).length }),
@@ -323,7 +342,7 @@ export default function Home() {
                   <LiveTournament
                     teams={teams} predictions={predictions} groups={groups}
                     liveMatches={liveMatches} stats={liveStats} verdicts={verdicts}
-                    timezone={geoTz}
+                    bracket={bracket} timezone={geoTz} apiStandings={apiStandings}
                   />
                 </TabPane>
               )}
