@@ -33,6 +33,9 @@ export interface LiveMatch {
       score1/score2 siguen null hasta FINISHED para no contaminar simulador/veredictos) */
   liveScore1?: number | null;
   liveScore2?: number | null;
+  /** ganador real del cruce (incluye desempate por penales); null si empate/no terminado.
+      Solo vía API football-data; usado para resolver el cuadro eliminatorio. */
+  winner?: string | null;
 }
 
 /** clave canónica "A|B" (orden alfabético) → ganador o null si empate */

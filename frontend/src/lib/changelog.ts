@@ -19,23 +19,77 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-06-19-parejo-empate",
+    date: "2026-06-19",
+    tag: "improve",
+    title: {
+      es: "Partidos muy parejos se pronostican como empate",
+      en: "Very even matches are predicted as a draw",
+      pt: "Jogos muito equilibrados são previstos como empate",
+    },
+    items: {
+      es: [
+        "Cuando las probabilidades están casi a la par (ej. 36% / 35% / 36%), el pronóstico ya no elige un favorito por un pelo: se da por empate, que es lo más sensato. Aplica en el predictor, en grupos y en Modelo vs Realidad.",
+        "Si pronosticamos empate y el partido no termina empatado, igual cuenta como acierto si gana el equipo con más probabilidad: solo fallamos si gana el menos probable (un batacazo).",
+      ],
+      en: [
+        "When the odds are almost level (e.g. 36% / 35% / 36%), the prediction no longer picks a favourite by a hair — it's called a draw, which is the sensible read. Applies in the predictor, groups and Model vs Reality.",
+        "If we predict a draw and it doesn't end level, it still counts as correct when the more likely team wins — we only miss if the underdog pulls off an upset.",
+      ],
+      pt: [
+        "Quando as probabilidades estão quase niveladas (ex. 36% / 35% / 36%), a previsão não escolhe mais um favorito por um triz — é dada como empate, o mais sensato. Vale no preditor, nos grupos e em Modelo vs Realidade.",
+        "Se prevemos empate e o jogo não termina igual, ainda conta como acerto quando vence o time mais provável — só erramos se o azarão dá a zebra.",
+      ],
+    },
+  },
+  {
+    id: "2026-06-19-bracket-vivo",
+    date: "2026-06-19",
+    tag: "new",
+    title: {
+      es: "Cuadro de eliminatorias en vivo + nueva vista En Vivo",
+      en: "Live knockout bracket + revamped Live view",
+      pt: "Chaveamento ao vivo + nova aba Ao Vivo",
+    },
+    items: {
+      es: [
+        "Nuevo cuadro completo (Dieciseisavos → Final) con líneas tipo llave: ubica cada equipo según su puesto en la tabla y avanza a los ganadores con cada resultado real.",
+        "Las posiciones de grupo ahora salen de la tabla oficial (desempates reales: diferencia de goles, fair play, etc.), no de un cálculo aproximado.",
+        "La pestaña En Vivo se reorganizó (Modelo vs Realidad y Próximos arriba; dos botones Tabla / Eliminatorias abajo) y el cuadro se ve bien en móvil.",
+      ],
+      en: [
+        "New full bracket (Round of 32 → Final) with bracket lines: slots each team by its standing and advances winners with every real result.",
+        "Group positions now come from the official standings (real tiebreakers: goal difference, fair play, etc.), not an approximation.",
+        "The Live tab was reorganised (Model vs Reality and Upcoming on top; two buttons Standings / Knockout below) and the bracket works well on mobile.",
+      ],
+      pt: [
+        "Novo chaveamento completo (16 avos → Final) com linhas de chave: posiciona cada time pela classificação e avança os vencedores a cada resultado real.",
+        "As posições de grupo agora vêm da classificação oficial (critérios reais: saldo de gols, fair play, etc.), não de um cálculo aproximado.",
+        "A aba Ao Vivo foi reorganizada (Modelo vs Realidade e Próximos no topo; dois botões Classificação / Mata-mata abaixo) e o chaveamento fica bom no celular.",
+      ],
+    },
+  },
+  {
     id: "2026-06-17-parejo",
     date: "2026-06-17",
     tag: "new",
     title: {
-      es: "Aviso de partido parejo",
-      en: "Tight-match flag",
-      pt: "Aviso de jogo equilibrado",
+      es: "Calidad del pronóstico y partidos parejos",
+      en: "Forecast quality and tight matches",
+      pt: "Qualidade do prognóstico e jogos equilibrados",
     },
     items: {
       es: [
-        "Cuando ninguna selección es favorita clara, el predictor marca el partido como parejo y avisa que el empate es casi tan probable como una victoria.",
+        "Cuando ninguna selección es favorita clara, marcamos el partido como parejo y avisamos que el empate es casi tan probable como una victoria — en el predictor y en los partidos en vivo.",
+        "Nueva sección «Calidad del pronóstico» en vivo: medimos qué tan buenas son las probabilidades (Brier y RPS), no solo si acertamos, y lo comparamos contra el azar.",
       ],
       en: [
-        "When there's no clear favourite, the predictor flags the match as tight and warns that a draw is almost as likely as a win.",
+        "When there's no clear favourite, we flag the match as tight and warn that a draw is almost as likely as a win — in the predictor and in live matches.",
+        "New live «Forecast quality» section: we measure how good the probabilities are (Brier and RPS), not just whether we got it right, compared against random.",
       ],
       pt: [
-        "Quando não há favorito claro, o preditor marca o jogo como equilibrado e avisa que o empate é quase tão provável quanto uma vitória.",
+        "Quando não há favorito claro, marcamos o jogo como equilibrado e avisamos que o empate é quase tão provável quanto uma vitória — no preditor e nos jogos ao vivo.",
+        "Nova seção «Qualidade do prognóstico» ao vivo: medimos quão boas são as probabilidades (Brier e RPS), não só se acertamos, comparado com o acaso.",
       ],
     },
   },

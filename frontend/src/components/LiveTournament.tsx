@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import type { TeamInfo, Prediction, LiveMatch } from "@/types";
-import type { LiveStats, MatchVerdict } from "@/lib/live";
-import { computeGroupStandings } from "@/lib/live";
+import type { LiveStats, MatchVerdict, StandingRow } from "@/lib/live";
+import { computeGroupStandings, isTightMatch, predictedOutcome } from "@/lib/live";
+import { type Bracket } from "@/lib/simulator";
+import LiveBracket from "@/components/LiveBracket";
 import { staggerContainer, fadeUp } from "@/lib/animations";
 import { useLang } from "@/lib/i18n";
 
@@ -15,8 +17,11 @@ interface Props {
   liveMatches: LiveMatch[];
   stats: LiveStats;
   verdicts: MatchVerdict[];
+  bracket?: Bracket | null;
   /** zona horaria por IP (Vercel geo); null → zona del sistema */
   timezone?: string | null;
+  /** tabla oficial (football-data); null → se calcula desde los marcadores */
+  apiStandings?: Record<string, StandingRow[]> | null;
 }
 
 const MVR_PREVIEW = 6; // tarjetas visibles antes de "Ver todos"
@@ -27,7 +32,7 @@ function fmtPct(n: number) { return `${(n * 100).toFixed(0)}%`; }
    EN VIVO — lo que va del torneo: realidad + modelo
 ══════════════════════════════════════════════════════ */
 export default function LiveTournament({
-  teams, predictions, groups, liveMatches, stats, verdicts, timezone,
+  teams, predictions, groups, liveMatches, stats, verdicts, bracket, timezone, apiStandings,
 }: Props) {
   const T = useLang();
   const [showAll, setShowAll] = useState(false);
@@ -58,13 +63,29 @@ export default function LiveTournament({
   const hits = verdicts.filter((v) => v.hit).length;
   const pct = verdicts.length ? Math.round((hits / verdicts.length) * 100) : 0;
 
+  /* Posiciones por grupo: ÚNICA y DIRECTAMENTE de la tabla oficial de la API
+     (orden y stats tal cual football-data, con sus desempates reales). Aunque
+     tarde en actualizarse, manda la API. Solo si la API no responde (sin token /
+     error) se cae al cálculo propio desde los marcadores para no quedar vacío. */
+  const allStandings = useMemo(
+    () =>
+      apiStandings && Object.keys(apiStandings).length > 0
+        ? apiStandings
+        : computeGroupStandings(liveMatches, groups),
+    [apiStandings, liveMatches, groups]
+  );
+
   /* Posiciones reales: solo grupos con al menos un partido jugado */
-  const standings = useMemo(() => {
-    const all = computeGroupStandings(liveMatches, groups);
-    return Object.entries(all)
-      .filter(([, rows]) => rows.some((r) => r.played > 0))
-      .sort(([a], [b]) => a.localeCompare(b));
-  }, [liveMatches, groups]);
+  const standings = useMemo(
+    () =>
+      Object.entries(allStandings)
+        .filter(([, rows]) => rows.some((r) => r.played > 0))
+        .sort(([a], [b]) => a.localeCompare(b)),
+    [allStandings]
+  );
+
+  /* Vista de la sección final: tabla de posiciones o cuadro de eliminatorias */
+  const [liveView, setLiveView] = useState<"standings" | "bracket">("standings");
 
   /* Próximos partidos: las siguientes 2 fechas con partidos pendientes */
   const today = new Date().toLocaleDateString("en-CA");
@@ -79,7 +100,7 @@ export default function LiveTournament({
   }, [liveMatches, teams, today]);
 
   /* Pronóstico del modelo para un partido pendiente o en juego */
-  type Forecast = { label: string; prob: number; probs: { t1: number; draw: number; t2: number } };
+  type Forecast = { label: string; prob: number; probs: { t1: number; draw: number; t2: number }; tight: boolean };
   function forecast(m: LiveMatch): Forecast | null {
     const direct = predictions[`${m.team1}|${m.team2}`];
     const reverse = predictions[`${m.team2}|${m.team1}`];
@@ -89,8 +110,10 @@ export default function LiveTournament({
         ? { t1: reverse.away_win, draw: reverse.draw, t2: reverse.home_win }
         : null;
     if (!probs) return null;
-    const [k, p] = Object.entries(probs).sort((a, b) => b[1] - a[1])[0];
-    return { label: k === "t1" ? m.team1 : k === "t2" ? m.team2 : T.draw, prob: p, probs };
+    // Muy parejo (equipos a la par + empate competitivo) → se da por empate
+    const k = predictedOutcome(probs);
+    const tight = isTightMatch(probs);
+    return { label: k === "t1" ? m.team1 : k === "t2" ? m.team2 : T.draw, prob: probs[k], probs, tight };
   }
 
   /* Si hay zona por IP (geo de Vercel) se usa esa; si no, la del sistema. */
@@ -199,6 +222,19 @@ export default function LiveTournament({
                         {T.lt_forecast}:{" "}
                         <span className="font-bold" style={{ color: "var(--text)" }}>{f.label}</span> · {fmtPct(f.prob)}
                       </p>
+                      {f.tight && (
+                        <p
+                          className="text-[10px] mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full"
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            background: "rgba(119,119,153,0.14)",
+                            border: "1px solid rgba(119,119,153,0.30)",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          🟰 {T.tightMatch}
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -278,62 +314,6 @@ export default function LiveTournament({
         )}
       </motion.section>
 
-      {/* ── Posiciones oficiales ── */}
-      {standings.length > 0 && (
-        <motion.section variants={fadeUp} className="space-y-3">
-          <SectionTitle title={T.lt_standings} note={T.lt_standingsNote} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {standings.map(([g, rows]) => (
-              <div key={g} className="stat-card !p-4 text-left">
-                {/* encabezado alineado con las columnas numéricas */}
-                <div className="grid grid-cols-[1fr_1.8rem_2.4rem_1.9rem] gap-x-1.5 items-baseline mb-2 pb-2 border-b border-[var(--border-subtle)]">
-                  <span className="text-xs font-black" style={{ color: "var(--wc-red)" }}>
-                    {T.group} {g}
-                  </span>
-                  {[T.lt_playedHead, T.lt_gdHead, T.lt_ptsHead].map((h) => (
-                    <span
-                      key={h}
-                      className="text-[9px] uppercase tracking-wider text-right"
-                      style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
-                    >
-                      {h}
-                    </span>
-                  ))}
-                </div>
-                <div className="space-y-1.5">
-                  {rows.map((r, i) => (
-                    <div
-                      key={r.team}
-                      className="grid grid-cols-[1fr_1.8rem_2.4rem_1.9rem] gap-x-1.5 items-center text-xs"
-                    >
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{
-                            background:
-                              i < 2 ? "#22c55e" : i === 2 ? "#f59e0b88" : "rgba(255,255,255,0.10)",
-                          }}
-                        />
-                        <span className="truncate">{flag(r.team)} {r.team}</span>
-                      </span>
-                      <span className="tabular-nums text-right" style={{ color: "var(--text-muted)" }}>
-                        {r.played}
-                      </span>
-                      <span className="tabular-nums text-right" style={{ color: "var(--text-muted)" }}>
-                        {r.gd > 0 ? `+${r.gd}` : r.gd}
-                      </span>
-                      <span className="tabular-nums font-bold text-right" style={{ color: "var(--wc-gold)" }}>
-                        {r.points}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.section>
-      )}
-
       {/* ── Próximos partidos ── */}
       {upcoming.length > 0 && (
         <motion.section variants={fadeUp} className="space-y-3">
@@ -401,6 +381,92 @@ export default function LiveTournament({
               </div>
             ))}
           </div>
+        </motion.section>
+      )}
+
+      {/* ── Tabla de posiciones / Eliminatorias (dos botones) ── */}
+      {(standings.length > 0 || bracket) && (
+        <motion.section variants={fadeUp} className="space-y-3">
+          <div className="flex gap-1 bg-[var(--surface-2)] rounded-lg p-1 w-fit">
+            {([
+              { key: "standings" as const, label: T.lt_tabStandings },
+              { key: "bracket"   as const, label: T.lt_tabBracket },
+            ]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setLiveView(key)}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  liveView === key ? "bg-[var(--wc-red)] text-white" : "text-[var(--text-muted)]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {liveView === "standings" ? (
+            standings.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {standings.map(([g, rows]) => (
+                  <div key={g} className="stat-card !p-4 text-left">
+                    <div className="grid grid-cols-[1fr_1.8rem_2.4rem_1.9rem] gap-x-1.5 items-baseline mb-2 pb-2 border-b border-[var(--border-subtle)]">
+                      <span className="text-xs font-black" style={{ color: "var(--wc-red)" }}>
+                        {T.group} {g}
+                      </span>
+                      {[T.lt_playedHead, T.lt_gdHead, T.lt_ptsHead].map((h) => (
+                        <span
+                          key={h}
+                          className="text-[9px] uppercase tracking-wider text-right"
+                          style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}
+                        >
+                          {h}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="space-y-1.5">
+                      {rows.map((r, i) => (
+                        <div
+                          key={r.team}
+                          className="grid grid-cols-[1fr_1.8rem_2.4rem_1.9rem] gap-x-1.5 items-center text-xs"
+                        >
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{
+                                background:
+                                  i < 2 ? "#22c55e" : i === 2 ? "#f59e0b88" : "rgba(255,255,255,0.10)",
+                              }}
+                            />
+                            <span className="truncate">{flag(r.team)} {r.team}</span>
+                          </span>
+                          <span className="tabular-nums text-right" style={{ color: "var(--text-muted)" }}>
+                            {r.played}
+                          </span>
+                          <span className="tabular-nums text-right" style={{ color: "var(--text-muted)" }}>
+                            {r.gd > 0 ? `+${r.gd}` : r.gd}
+                          </span>
+                          <span className="tabular-nums font-bold text-right" style={{ color: "var(--wc-gold)" }}>
+                            {r.points}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>{T.lt_empty}</p>
+            )
+          ) : (
+            bracket && (
+              <LiveBracket
+                bracket={bracket}
+                liveMatches={liveMatches}
+                standings={allStandings}
+                teams={teams}
+              />
+            )
+          )}
         </motion.section>
       )}
 
