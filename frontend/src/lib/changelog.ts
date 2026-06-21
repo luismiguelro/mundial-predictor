@@ -19,6 +19,27 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-06-21-fix-marcador",
+    date: "2026-06-21",
+    tag: "fix",
+    title: {
+      es: "Corrección del marcador España–Arabia Saudí",
+      en: "Spain–Saudi Arabia score fix",
+      pt: "Correção do placar Espanha–Arábia Saudita",
+    },
+    items: {
+      es: [
+        "La fuente oficial publicó España 5–0 por error; el resultado real fue 4–0. Se corrige a mano mientras la API se actualiza.",
+      ],
+      en: [
+        "The official feed mistakenly showed Spain 5–0; the real result was 4–0. Patched by hand until the API updates.",
+      ],
+      pt: [
+        "A fonte oficial mostrou Espanha 5–0 por engano; o resultado real foi 4–0. Corrigido manualmente até a API atualizar.",
+      ],
+    },
+  },
+  {
     id: "2026-06-21-sugerir-mejora",
     date: "2026-06-21",
     tag: "new",

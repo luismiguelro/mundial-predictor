@@ -1,4 +1,5 @@
 import type { FixedResults, GroupMatch, GroupStandingEntry, LiveMatch, Prediction } from "@/types";
+import { applyScoreOverrides } from "@/lib/overrides";
 
 /**
  * Resultados reales del Mundial 2026.
@@ -104,7 +105,9 @@ async function fetchFromOpenfootball(): Promise<LiveMatch[]> {
 }
 
 export async function fetchLiveMatches(): Promise<LiveMatch[]> {
-  return (await fetchFromApi()) ?? (await fetchFromOpenfootball());
+  const matches = (await fetchFromApi()) ?? (await fetchFromOpenfootball());
+  // Correcciones manuales de marcadores erróneos de la fuente (ver overrides.ts)
+  return applyScoreOverrides(matches);
 }
 
 export function pairKey(t1: string, t2: string): string {
