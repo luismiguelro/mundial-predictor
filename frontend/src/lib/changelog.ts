@@ -19,6 +19,27 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-06-21-sugerir-mejora",
+    date: "2026-06-21",
+    tag: "new",
+    title: {
+      es: "Sugiere mejoras desde la campanita",
+      en: "Suggest improvements from the bell",
+      pt: "Sugira melhorias pelo sininho",
+    },
+    items: {
+      es: [
+        "Nuevo apartado «¿Tienes una idea?» al pie del panel de novedades: escribe tu sugerencia o reporta un error y se envía al instante, sin salir de la app.",
+      ],
+      en: [
+        "New “Got an idea?” box at the bottom of the what's-new panel: type your suggestion or report a bug and it's sent instantly, without leaving the app.",
+      ],
+      pt: [
+        "Nova seção “Tem uma ideia?” no rodapé do painel de novidades: escreva sua sugestão ou relate um erro e é enviado na hora, sem sair do app.",
+      ],
+    },
+  },
+  {
     id: "2026-06-19-parejo-empate",
     date: "2026-06-19",
     tag: "improve",
@@ -188,23 +209,46 @@ export const CHANGELOG: ChangeEntry[] = [
 /** id de la entrada más reciente — referencia para el punto de «no leído». */
 export const CHANGELOG_LATEST = CHANGELOG[0]?.id ?? "";
 
+/* Formulario web para que los visitantes sugieran mejoras o reporten errores.
+   Pega aquí tu URL (Google Forms / Tally / Formspree). Si queda vacío, el
+   pie de "Sugerir una mejora" no se muestra. */
+export const FEEDBACK_URL = "https://formspree.io/f/mojjqwaa";
+
 export const CHANGELOG_STR = {
   es: {
     bell:    "Novedades",
     title:   "Registro de cambios",
     subtitle: "Lo último que cambió en el predictor",
     tags:    { new: "Nuevo", improve: "Mejora", fix: "Arreglo" } as Record<ChangeTag, string>,
+    suggestTitle:       "¿Tienes una idea?",
+    suggestPlaceholder: "Cuéntame tu sugerencia o reporta un error…",
+    suggestSend:        "Enviar sugerencia",
+    suggestSending:     "Enviando…",
+    suggestThanks:      "¡Gracias! Recibí tu sugerencia.",
+    suggestError:       "No se pudo enviar. Inténtalo de nuevo.",
   },
   en: {
     bell:    "What's new",
     title:   "Changelog",
     subtitle: "The latest updates to the predictor",
     tags:    { new: "New", improve: "Improved", fix: "Fix" } as Record<ChangeTag, string>,
+    suggestTitle:       "Got an idea?",
+    suggestPlaceholder: "Tell me your suggestion or report a bug…",
+    suggestSend:        "Send suggestion",
+    suggestSending:     "Sending…",
+    suggestThanks:      "Thanks! Got your suggestion.",
+    suggestError:       "Couldn't send. Please try again.",
   },
   pt: {
     bell:    "Novidades",
     title:   "Registro de alterações",
     subtitle: "As últimas mudanças no preditor",
     tags:    { new: "Novo", improve: "Melhoria", fix: "Correção" } as Record<ChangeTag, string>,
+    suggestTitle:       "Tem uma ideia?",
+    suggestPlaceholder: "Conte sua sugestão ou relate um erro…",
+    suggestSend:        "Enviar sugestão",
+    suggestSending:     "Enviando…",
+    suggestThanks:      "Obrigado! Recebi sua sugestão.",
+    suggestError:       "Não foi possível enviar. Tente de novo.",
   },
 } as const;
