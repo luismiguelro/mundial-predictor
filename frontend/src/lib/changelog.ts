@@ -19,6 +19,111 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-06-26-modelo-goles",
+    date: "2026-06-26",
+    tag: "improve",
+    title: {
+      es: "¿Por qué un «grande» puede tener menos probabilidad?",
+      en: "Why a “big team” can have lower odds",
+      pt: "Por que um «gigante» pode ter menos probabilidade?",
+    },
+    items: {
+      es: [
+        "Nueva entrada en el Glosario que aclara una duda frecuente: las probabilidades de campeón salen del modelo de GOLES (Dixon-Coles), no del ranking ELO —que es solo informativo y no decide ningún partido.",
+        "Por eso una selección en racha goleadora (p. ej. Colombia) puede igualar a un gigante con más ELO que gana por la mínima (p. ej. Francia): el modelo mide forma reciente en goles, no prestigio histórico.",
+      ],
+      en: [
+        "New Glossary entry clearing up a common question: the title odds come from the GOALS model (Dixon-Coles), not the ELO ranking —which is informational only and decides no match.",
+        "That's why a team on a scoring run (e.g. Colombia) can match a higher-ELO giant that wins narrowly (e.g. France): the model measures recent goal form, not historical prestige.",
+      ],
+      pt: [
+        "Nova entrada no Glossário que esclarece uma dúvida comum: as probabilidades de campeão vêm do modelo de GOLS (Dixon-Coles), não do ranking ELO —que é apenas informativo e não decide nenhum jogo.",
+        "Por isso uma seleção em fase goleadora (ex. Colômbia) pode igualar um gigante com mais ELO que vence no detalhe (ex. França): o modelo mede a forma recente em gols, não o prestígio histórico.",
+      ],
+    },
+  },
+  {
+    id: "2026-06-26-eliminatorias",
+    date: "2026-06-26",
+    tag: "new",
+    title: {
+      es: "Eliminatorias con probabilidades",
+      en: "Knockouts with probabilities",
+      pt: "Mata-mata com probabilidades",
+    },
+    items: {
+      es: [
+        "El cuadro de «En Vivo» ahora muestra la probabilidad de cada selección de ganar su cruce (incluye los penales según el historial) en cuanto se conocen los dos rivales y antes de que se juegue.",
+        "Las «Proyecciones · Por ronda» ya se condicionan a los resultados reales de la fase de grupos: conforme se cierran los grupos, las probabilidades de llegar a octavos, cuartos, semis, final y título reflejan el camino real de cada equipo, no un promedio de sorteos.",
+        "Los aciertos del modelo en eliminatorias ahora se miden por quién AVANZA (con penales incluidos), no por el marcador de 90': un empate que se define en los penales ya no cuenta como «empate» sino como acierto/fallo según el equipo que pasó.",
+        "La calibración del modelo (en el Glosario) ahora se puede filtrar por fase —Todo · Grupos · Eliminatoria— para ver por separado qué tan afinado va el modelo en cada régimen.",
+        "Toca cualquier cruce del cuadro «En Vivo» para abrir su detalle: probabilidad de avanzar, marcador esperado, opción de prórroga/penales y los marcadores más probables (y el resultado real si ya se jugó).",
+      ],
+      en: [
+        "The “Live” bracket now shows each team's probability of winning its tie (penalties included, weighted by history) as soon as both opponents are known and before the match is played.",
+        "“Projections · By round” are now conditioned on the real group-stage results: as groups finish, the odds of reaching the round of 16, quarters, semis, final and title reflect each team's actual path, not an average of draws.",
+        "The model's hit rate in the knockouts is now scored by who ADVANCES (penalties included), not by the 90' result: a tie settled on penalties no longer counts as a “draw” but as a hit/miss based on the team that went through.",
+        "Model calibration (in the Glossary) can now be filtered by phase —All · Groups · Knockouts— to see separately how sharp the model is in each regime.",
+        "Tap any tie in the “Live” bracket to open its detail: chance to advance, expected score, extra-time/penalties likelihood and the most likely scorelines (plus the actual result once it's played).",
+      ],
+      pt: [
+        "O chaveamento de “Ao Vivo” agora mostra a probabilidade de cada seleção vencer seu confronto (com pênaltis ponderados pelo histórico) assim que os dois adversários são conhecidos e antes do jogo.",
+        "As “Projeções · Por fase” passam a ser condicionadas aos resultados reais da fase de grupos: conforme os grupos terminam, as probabilidades de chegar às oitavas, quartas, semis, final e título refletem o caminho real de cada time, não uma média de sorteios.",
+        "Os acertos do modelo no mata-mata agora são medidos por quem AVANÇA (com pênaltis incluídos), não pelo placar dos 90': um empate decidido nos pênaltis deixa de contar como “empate” e passa a ser acerto/erro conforme o time que se classificou.",
+        "A calibração do modelo (no Glossário) agora pode ser filtrada por fase —Tudo · Grupos · Mata-mata— para ver separadamente o quão afinado o modelo está em cada regime.",
+        "Toque em qualquer confronto do chaveamento “Ao Vivo” para abrir o detalhe: chance de avançar, placar esperado, probabilidade de prorrogação/pênaltis e os placares mais prováveis (e o resultado real quando já jogado).",
+      ],
+    },
+  },
+  {
+    id: "2026-06-22-evolucion",
+    date: "2026-06-22",
+    tag: "new",
+    title: {
+      es: "Evolución del favorito",
+      en: "Title-race trend",
+      pt: "Evolução do favorito",
+    },
+    items: {
+      es: [
+        "Nueva vista en «Proyecciones»: un gráfico de cómo se mueve la probabilidad de ser campeón de cada selección jornada a jornada — quién sube y quién baja con los resultados reales.",
+        "Cada punto vuelve a correr el Monte Carlo condicionado a los partidos ya jugados hasta esa fecha; destaca la mayor subida y la mayor caída en puntos porcentuales.",
+      ],
+      en: [
+        "New view in “Projections”: a chart of how each team's chance of winning the cup moves matchday by matchday — who climbs and who drops as real results come in.",
+        "Each point re-runs the Monte Carlo conditioned on the matches played up to that date; it highlights the biggest riser and faller in percentage points.",
+      ],
+      pt: [
+        "Nova visão em “Projeções”: um gráfico de como a probabilidade de ser campeão de cada seleção se move a cada rodada — quem sobe e quem cai com os resultados reais.",
+        "Cada ponto recalcula o Monte Carlo condicionado aos jogos disputados até aquela data; destaca a maior alta e a maior queda em pontos percentuais.",
+      ],
+    },
+  },
+  {
+    id: "2026-06-22-calibracion",
+    date: "2026-06-22",
+    tag: "new",
+    title: {
+      es: "Calibración del modelo (en el Glosario)",
+      en: "Model calibration (in the Glossary)",
+      pt: "Calibração do modelo (no Glossário)",
+    },
+    items: {
+      es: [
+        "Nueva tarjeta en el Glosario: un diagrama de confiabilidad en vivo que muestra si la confianza del modelo coincide con la realidad — cuando dice «60 %», ¿pasa el 60 % de las veces?",
+        "Incluye el ECE (error de calibración) y las métricas Brier y RPS comparadas contra el azar, recalculadas con cada partido que termina.",
+      ],
+      en: [
+        "New card in the Glossary: a live reliability diagram showing whether the model's confidence matches reality — when it says “60%”, does it happen 60% of the time?",
+        "Includes the ECE (calibration error) plus Brier and RPS metrics versus random, recomputed as each match ends.",
+      ],
+      pt: [
+        "Novo cartão no Glossário: um diagrama de confiabilidade ao vivo que mostra se a confiança do modelo coincide com a realidade — quando diz “60%”, acontece 60% das vezes?",
+        "Inclui o ECE (erro de calibração) e as métricas Brier e RPS comparadas ao acaso, recalculadas a cada jogo que termina.",
+      ],
+    },
+  },
+  {
     id: "2026-06-21-fix-marcador",
     date: "2026-06-21",
     tag: "fix",

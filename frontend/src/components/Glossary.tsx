@@ -1,6 +1,8 @@
 "use client";
 
 import { useLang } from "@/lib/i18n";
+import type { MatchVerdict } from "@/lib/live";
+import Calibration from "@/components/Calibration";
 
 interface Term {
   term: string;
@@ -25,6 +27,14 @@ const TERMS: Term[] = [
       "El modelo de predicción. En lugar de clasificar el resultado (local/empate/visitante), estima las fuerzas de ataque y defensa de cada equipo y modela los goles con una distribución de Poisson. De esa misma matriz de marcadores salen, coherentes, las probabilidades 1X2 y el marcador más probable.",
     detail:
       "Entrenado con 12 000+ partidos internacionales recientes (no solo Mundiales) con decaimiento temporal (los partidos recientes pesan más) y la corrección de Dixon-Coles para marcadores bajos. Backtest honesto en Qatar 2022: accuracy 53%, log-loss 1.036, Brier 0.201 — mejor que el clasificador anterior en las tres métricas.",
+  },
+  {
+    term: "¿Por qué un \"grande\" puede tener menos probabilidad?",
+    icon: "⚖️",
+    definition:
+      "Las probabilidades de campeón salen del modelo de GOLES (Dixon-Coles), no del ranking ELO. El ELO se muestra como referencia, pero no decide ni un solo partido. Por eso una selección en buena racha goleadora puede igualar o superar a un gigante con más ELO que gana sus partidos por la mínima.",
+    detail:
+      "Ejemplo real de este Mundial: Francia (ELO 2022, 3.ª) y Colombia (ELO 1933, 8.ª) salen casi empatadas como campeón (~5.8% cada una). El modelo les da fuerzas de ataque/defensa casi idénticas porque, en goles recientes, lo son: Colombia llega de una racha goleadora fuerte y Francia tiende a ganar cerrado. Por ELO puro Francia le ganaría a Colombia ~62%, pero el modelo de goles da ~53%. No es un error: es un modelo de forma reciente medida en goles, no de prestigio histórico. El camino en el cuadro (rivales que tocan) también pesa.",
   },
   {
     term: "Monte Carlo",
@@ -100,7 +110,7 @@ const TERMS: Term[] = [
   },
 ];
 
-export default function Glossary() {
+export default function Glossary({ verdicts = [] }: { verdicts?: MatchVerdict[] }) {
   const T = useLang();
   return (
     <div className="space-y-4 max-w-3xl mx-auto">
@@ -108,6 +118,28 @@ export default function Glossary() {
         <h2 className="text-2xl font-black mb-2">{T.glossaryTitle}</h2>
         <p className="text-[var(--text-muted)] text-sm">{T.glossarySubtitle}</p>
       </div>
+
+      {/* Calibración del modelo: tarjeta interactiva (diagrama en vivo + métricas).
+          Va primera porque es contenido en vivo del Mundial 2026 en curso. */}
+      <details className="stat-card group cursor-pointer text-left" style={{ borderColor: "rgba(212,168,67,0.35)" }}>
+        <summary className="flex items-center gap-3 list-none cursor-pointer select-none">
+          <span className="text-2xl">🎯</span>
+          <span className="font-bold text-base flex-1">
+            {T.lt_calibTitle}
+            <span
+              className="ml-2 align-middle text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+              style={{ fontFamily: "var(--font-mono)", background: "rgba(207,10,44,0.14)", color: "var(--wc-red)" }}
+            >
+              ● {T.lt_live}
+            </span>
+          </span>
+          <span className="text-[var(--text-muted)] text-sm transition-transform group-open:rotate-180">▼</span>
+        </summary>
+        <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] space-y-3">
+          <p className="text-sm text-[var(--text)]">{T.lt_calibNote} {T.lt_calibReading}</p>
+          <Calibration verdicts={verdicts} embedded />
+        </div>
+      </details>
 
       {TERMS.map(({ term, icon, definition, detail }) => (
         <details key={term} className="stat-card group cursor-pointer text-left">

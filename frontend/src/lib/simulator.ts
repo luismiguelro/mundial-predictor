@@ -16,7 +16,7 @@ interface R32Cross { num: number; a: Slot; b: Slot }
 interface KoCross { num: number; a: string; b: string }  // a/b: "W74" (ganador del 74)
 export interface Bracket { r32: R32Cross[]; ko: KoCross[] }
 
-function getProbs(predictions: PredictionsMap, t1: string, t2: string): Probs {
+export function getProbs(predictions: PredictionsMap, t1: string, t2: string): Probs {
   return (
     predictions[`${t1}|${t2}`] ??
     (predictions[`${t2}|${t1}`]
@@ -29,8 +29,23 @@ function getProbs(predictions: PredictionsMap, t1: string, t2: string): Probs {
   );
 }
 
+/**
+ * Probabilidad de que cada equipo GANE el cruce de eliminatoria (incluye el
+ * desempate por penales, repartido según el historial igual que sampleKnockout).
+ * Devuelve {pa, pb} con pa+pb = 1, orientado al orden (a, b).
+ */
+export function crossWinProb(
+  predictions: PredictionsMap, a: string, b: string, pens?: PenRates
+): { pa: number; pb: number } {
+  const p = getProbs(predictions, a, b);
+  const r1 = pens?.[a] ?? 0.5;
+  const r2 = pens?.[b] ?? 0.5;
+  const pa = p.home_win + p.draw * (r1 / (r1 + r2));
+  return { pa, pb: 1 - pa };
+}
+
 /** Goles esperados (λ) de cada equipo, orientados al orden (t1, t2). */
-function getLambdas(predictions: PredictionsMap, t1: string, t2: string): { l1: number; l2: number } {
+export function getLambdas(predictions: PredictionsMap, t1: string, t2: string): { l1: number; l2: number } {
   const d = predictions[`${t1}|${t2}`];
   if (d?.exp_home != null && d?.exp_away != null) return { l1: d.exp_home, l2: d.exp_away };
   const r = predictions[`${t2}|${t1}`];
@@ -319,6 +334,126 @@ export function runMonteCarlo(
       champion: counts[team].champion / n,
     }))
     .sort((a, b) => b.champion - a.champion);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   CAMINO AL TÍTULO de un equipo (Monte Carlo, ruta personalizada)
+   Para el equipo objetivo, en cada ronda del cuadro registra contra
+   quién jugaría y con qué probabilidad supera la ronda. Condiciona los
+   grupos a los resultados reales (igual que «Proyecciones · Por ronda»);
+   el mata-mata se simula. Requiere el bracket oficial.
+────────────────────────────────────────────────────────────── */
+export interface TeamPathRound {
+  round: "r32" | "r16" | "qf" | "sf" | "final";
+  /** P(el equipo llega a jugar esta ronda) */
+  reach: number;
+  /** P(supera esta ronda) — incondicional */
+  advance: number;
+  /** P(supera | llega): la dificultad real de esa ronda */
+  condAdvance: number;
+  /** rivales más probables en esa ronda (condicional a llegar) */
+  topOpponents: { team: string; prob: number }[];
+}
+export interface TeamPath {
+  team: string;
+  rounds: TeamPathRound[];
+  /** P(campeón) = supera la final */
+  champion: number;
+}
+
+/** Ronda del equipo a partir del nº de partido del fixture oficial. */
+function roundOfNum(num: number): TeamPathRound["round"] {
+  if (num <= 88) return "r32";
+  if (num <= 96) return "r16";
+  if (num <= 100) return "qf";
+  if (num <= 102) return "sf";
+  return "final";
+}
+
+export function simulateTeamPath(
+  team: string,
+  predictions: PredictionsMap,
+  groups: Groups,
+  teams: Record<string, TeamInfo>,
+  bracket: Bracket,
+  n = 2000,
+  fixedResults?: FixedResults,
+  scoreMap?: ScoreMap
+): TeamPath {
+  const allTeams = Object.values(groups).flat();
+  const elos = Object.fromEntries(allTeams.map((t) => [t, teams[t]?.elo ?? 1500]));
+  const hostBoost = Object.fromEntries(allTeams.map((t) => [t, teams[t]?.host_boost ?? 1]));
+  const penRates = buildPenRates(teams);
+
+  const ROUNDS: TeamPathRound["round"][] = ["r32", "r16", "qf", "sf", "final"];
+  const reach: Record<string, number> = {};
+  const adv: Record<string, number> = {};
+  const opp: Record<string, Record<string, number>> = {};
+  for (const r of ROUNDS) { reach[r] = 0; adv[r] = 0; opp[r] = {}; }
+
+  // slots de terceros (fijo entre sims)
+  const thirdSlots: { num: number; side: "a" | "b"; groups: string[] }[] = [];
+  for (const c of bracket.r32) {
+    if (c.a.type === "third") thirdSlots.push({ num: c.num, side: "a", groups: c.a.groups });
+    if (c.b.type === "third") thirdSlots.push({ num: c.num, side: "b", groups: c.b.groups });
+  }
+
+  const record = (rnd: TeamPathRound["round"], rival: string, won: boolean) => {
+    reach[rnd]++;
+    opp[rnd][rival] = (opp[rnd][rival] ?? 0) + 1;
+    if (won) adv[rnd]++;
+  };
+
+  for (let sim = 0; sim < n; sim++) {
+    const groupStandings: Record<string, string[]> = {};
+    const thirds: Array<{ team: string; group: string; pts: number; gd: number; gf: number; elo: number }> = [];
+    for (const [gname, gteams] of Object.entries(groups)) {
+      const { standings, stats } = simulateGroup(gteams, predictions, elos, scoreMap, fixedResults, hostBoost);
+      groupStandings[gname] = standings;
+      const third = standings[2];
+      const s = stats[third];
+      thirds.push({ team: third, group: gname, pts: s.pts, gd: s.gf - s.ga, gf: s.gf, elo: elos[third] ?? 1500 });
+    }
+    thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || b.elo - a.elo);
+    const thirdAssign = matchThirds(thirdSlots, thirds.slice(0, 8));
+
+    const winByNum: Record<number, string> = {};
+    // R32 (dieciseisavos)
+    for (const c of bracket.r32) {
+      const a = resolveSlot(c.a, c.num, "a", groupStandings, thirdAssign);
+      const b = resolveSlot(c.b, c.num, "b", groupStandings, thirdAssign);
+      if (!a || !b) continue;
+      const w = sampleKnockout(getProbs(predictions, a, b), a, b, penRates);
+      winByNum[c.num] = w;
+      if (a === team || b === team) record("r32", a === team ? b : a, w === team);
+    }
+    // R16 → Final
+    for (const c of bracket.ko) {
+      const a = winByNum[parseInt(c.a.slice(1), 10)];
+      const b = winByNum[parseInt(c.b.slice(1), 10)];
+      if (!a || !b) continue;
+      const w = sampleKnockout(getProbs(predictions, a, b), a, b, penRates);
+      winByNum[c.num] = w;
+      if (a === team || b === team) record(roundOfNum(c.num), a === team ? b : a, w === team);
+    }
+  }
+
+  const rounds: TeamPathRound[] = ROUNDS.map((r) => {
+    const reached = reach[r];
+    const topOpponents = Object.entries(opp[r])
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 3)
+      .map(([t, c]) => ({ team: t, prob: reached ? c / reached : 0 }));
+    return {
+      round: r,
+      reach: reached / n,
+      advance: adv[r] / n,
+      condAdvance: reached ? adv[r] / reached : 0,
+      topOpponents,
+    };
+  });
+
+  return { team, rounds, champion: adv.final / n };
 }
 
 /* ──────────────────────────────────────────────────────────────

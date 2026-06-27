@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useTransition, useMemo } from "react";
-import type { TeamInfo, Prediction, SimResult } from "@/types";
+import type { TeamInfo, Prediction, SimResult, FixedResults } from "@/types";
+import type { ScoreMap } from "@/lib/live";
 import { runMonteCarlo, type Bracket } from "@/lib/simulator";
 import { useLang } from "@/lib/i18n";
 
@@ -10,6 +11,9 @@ interface Props {
   predictions: Record<string, Prediction>;
   groups: Record<string, string[]>;
   bracket?: Bracket | null;
+  /** Resultados reales de grupos: condicionan el Monte Carlo a lo ya jugado. */
+  fixedResults?: FixedResults;
+  liveScores?: ScoreMap;
 }
 
 const LATAM = new Set([
@@ -23,7 +27,7 @@ function pct(v: number, decimals = 1) {
   return `${(v * 100).toFixed(decimals)}%`;
 }
 
-export default function Knockout({ teams, predictions, groups, bracket }: Props) {
+export default function Knockout({ teams, predictions, groups, bracket, fixedResults, liveScores }: Props) {
   const T = useLang();
 
   const ROUNDS = useMemo(() => [
@@ -43,10 +47,10 @@ export default function Knockout({ teams, predictions, groups, bracket }: Props)
 
   useEffect(() => {
     startTransition(() => {
-      setResults(runMonteCarlo(predictions, groups, teams, N_SIMS, undefined, undefined, bracket ?? undefined));
+      setResults(runMonteCarlo(predictions, groups, teams, N_SIMS, fixedResults, liveScores, bracket ?? undefined));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bracket]);
+  }, [bracket, fixedResults, liveScores]);
 
   const round = ROUNDS.find((r) => r.key === selected) ?? ROUNDS[1];
 

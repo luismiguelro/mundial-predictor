@@ -287,6 +287,9 @@ export interface MatchVerdict {
   prob: number;
   probs: { t1: number; draw: number; t2: number };
   hit: boolean;
+  /** partido de eliminatoria: el acierto se evalúa sobre quién AVANZÓ (con
+      penales), no sobre el marcador de 90'. */
+  knockout?: boolean;
 }
 
 /** Umbral de "partido parejo": el favorito supera al empate por ≤6 puntos. */
@@ -348,29 +351,56 @@ export function buildGroupProbIndex(groupMatches: Record<string, GroupMatch[]>):
 export function buildVerdicts(
   matches: LiveMatch[],
   predictions: Record<string, Prediction>,
-  groupProbs?: GroupProbIndex
+  groupProbs?: GroupProbIndex,
+  /** win-rate histórico en penales por equipo (buildPenRates). Reparte el empate
+      al evaluar cruces de eliminatoria; sin él, se reparte 50/50. */
+  penRates?: Record<string, number>
 ): MatchVerdict[] {
   const out: MatchVerdict[] = [];
   for (const m of matches) {
     if (m.score1 === null || m.score2 === null) continue;
-    let probs: { t1: number; draw: number; t2: number } | null = null;
+
     // 1) partido de grupos → mismas probabilidades que la pestaña Grupos
     const gp = groupProbs?.get(pairKey(m.team1, m.team2));
     if (gp) {
-      probs = gp.team1 === m.team1
+      const probs = gp.team1 === m.team1
         ? { t1: gp.t1_win, draw: gp.draw, t2: gp.t2_win }
         : { t1: gp.t2_win, draw: gp.draw, t2: gp.t1_win };
-    } else {
-      // 2) knockout u otro → predicciones neutrales del modelo
-      const direct = predictions[`${m.team1}|${m.team2}`];
-      const reverse = predictions[`${m.team2}|${m.team1}`];
-      if (direct) probs = { t1: direct.home_win, draw: direct.draw, t2: direct.away_win };
-      else if (reverse) probs = { t1: reverse.away_win, draw: reverse.draw, t2: reverse.home_win };
+      const actual = m.score1 > m.score2 ? "t1" : m.score1 < m.score2 ? "t2" : "draw";
+      const { predicted, hit } = evaluatePrediction(probs, actual);
+      out.push({ m, predicted, prob: probs[predicted], probs, hit });
+      continue;
     }
+
+    // 2) eliminatoria → predicciones neutrales del modelo. En el mata-mata
+    //    SIEMPRE avanza alguien: el acierto es "¿predijimos a quien avanzó?",
+    //    colapsando el empate a probabilidad de avance (penales por historial).
+    const direct = predictions[`${m.team1}|${m.team2}`];
+    const reverse = predictions[`${m.team2}|${m.team1}`];
+    let probs: { t1: number; draw: number; t2: number } | null = null;
+    if (direct) probs = { t1: direct.home_win, draw: direct.draw, t2: direct.away_win };
+    else if (reverse) probs = { t1: reverse.away_win, draw: reverse.draw, t2: reverse.home_win };
     if (!probs) continue;
-    const actual = m.score1 > m.score2 ? "t1" : m.score1 < m.score2 ? "t2" : "draw";
-    const { predicted, hit } = evaluatePrediction(probs, actual);
-    out.push({ m, predicted, prob: probs[predicted], probs, hit });
+
+    // quién avanzó de verdad: m.winner incluye el desempate por penales
+    const advanced = m.winner === m.team1 ? "t1"
+      : m.winner === m.team2 ? "t2"
+      : m.score1 > m.score2 ? "t1"
+      : m.score2 > m.score1 ? "t2"
+      : null;
+    if (!advanced) continue; // empate sin ganador conocido → no evaluable
+
+    const r1 = penRates?.[m.team1] ?? 0.5;
+    const r2 = penRates?.[m.team2] ?? 0.5;
+    const pAdv1 = probs.t1 + probs.draw * (r1 / (r1 + r2)); // P(avanza team1)
+    const predicted = pAdv1 >= 0.5 ? "t1" : "t2";
+    out.push({
+      m, predicted,
+      prob: predicted === "t1" ? pAdv1 : 1 - pAdv1,
+      probs,                         // se conserva 1X2 real (la calibración lo usa)
+      hit: predicted === advanced,
+      knockout: true,
+    });
   }
   return out;
 }
@@ -415,6 +445,62 @@ export function forecastMetrics(verdicts: MatchVerdict[]): ForecastMetrics {
     brierBaseline: n ? brierBase / n : 0,
     rpsBaseline: n ? rpsBase / n : 0,
   };
+}
+
+/* ── Calibración del modelo (reliability diagram) ──
+   ¿Cuando el modelo dice "60%", ocurre el 60% de las veces? Se mide en
+   multiclase one-vs-rest: cada partido aporta 3 pares (probabilidad asignada a
+   una clase, ¿ocurrió esa clase?) sobre local/empate/visitante. Se agrupan en
+   bins por probabilidad predicha; en cada bin comparamos la confianza media
+   predicha con la frecuencia observada. Si coinciden (puntos sobre la diagonal),
+   el modelo está bien calibrado. El ECE (Expected Calibration Error) resume la
+   desviación media ponderada por nº de casos — menor = mejor. */
+export interface ReliabilityBin {
+  lo: number;        // límite inferior del bin [0,1)
+  hi: number;        // límite superior
+  count: number;     // nº de pares (clase × partido) que caen en el bin
+  predMean: number;  // confianza media predicha en el bin
+  obsFreq: number;   // frecuencia observada de que esas clases ocurrieran
+}
+
+export interface Calibration {
+  bins: ReliabilityBin[];
+  ece: number;       // Expected Calibration Error (0 = perfecto)
+  pairs: number;     // nº total de pares evaluados (partidos × 3)
+  matches: number;   // nº de partidos terminados que entraron
+}
+
+export function calibrationCurve(verdicts: MatchVerdict[], nBins = 5): Calibration {
+  const acc = Array.from({ length: nBins }, (_, i) => ({
+    lo: i / nBins, hi: (i + 1) / nBins, sumP: 0, sumO: 0, count: 0,
+  }));
+  let matches = 0;
+  for (const v of verdicts) {
+    const { score1, score2 } = v.m;
+    if (score1 === null || score2 === null) continue;
+    matches++;
+    const oneVsRest: [number, number][] = [
+      [v.probs.t1, score1 > score2 ? 1 : 0],
+      [v.probs.draw, score1 === score2 ? 1 : 0],
+      [v.probs.t2, score1 < score2 ? 1 : 0],
+    ];
+    for (const [p, o] of oneVsRest) {
+      const idx = Math.min(nBins - 1, Math.max(0, Math.floor(p * nBins)));
+      const b = acc[idx];
+      b.sumP += p; b.sumO += o; b.count++;
+    }
+  }
+  const pairs = acc.reduce((s, b) => s + b.count, 0);
+  const bins: ReliabilityBin[] = acc.map((b) => ({
+    lo: b.lo, hi: b.hi, count: b.count,
+    predMean: b.count ? b.sumP / b.count : 0,
+    obsFreq: b.count ? b.sumO / b.count : 0,
+  }));
+  let ece = 0;
+  for (const b of bins) {
+    if (b.count) ece += (b.count / pairs) * Math.abs(b.predMean - b.obsFreq);
+  }
+  return { bins, ece, pairs, matches };
 }
 
 /* ── Posiciones reales por grupo, calculadas con los resultados oficiales ── */

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import type { TeamInfo, Prediction, LiveMatch } from "@/types";
 import type { LiveStats, MatchVerdict, StandingRow } from "@/lib/live";
 import { computeGroupStandings, isTightMatch, predictedOutcome } from "@/lib/live";
+import { overriddenGroups } from "@/lib/overrides";
 import { type Bracket } from "@/lib/simulator";
 import LiveBracket from "@/components/LiveBracket";
 import { staggerContainer, fadeUp } from "@/lib/animations";
@@ -67,13 +68,22 @@ export default function LiveTournament({
      (orden y stats tal cual football-data, con sus desempates reales). Aunque
      tarde en actualizarse, manda la API. Solo si la API no responde (sin token /
      error) se cae al cálculo propio desde los marcadores para no quedar vacío. */
-  const allStandings = useMemo(
-    () =>
-      apiStandings && Object.keys(apiStandings).length > 0
-        ? apiStandings
-        : computeGroupStandings(liveMatches, groups),
-    [apiStandings, liveMatches, groups]
-  );
+  const allStandings = useMemo(() => {
+    const hasApi = apiStandings && Object.keys(apiStandings).length > 0;
+    if (!hasApi) return computeGroupStandings(liveMatches, groups);
+    // La tabla oficial aún puede traer un marcador erróneo ya corregido a mano:
+    // para esos grupos la recalculamos desde los marcadores corregidos, usando
+    // el orden oficial como desempate fino. El resto queda tal cual la API.
+    const affected = overriddenGroups(liveMatches);
+    if (affected.size === 0) return apiStandings;
+    const apiOrder = Object.fromEntries(
+      Object.entries(apiStandings).map(([g, rows]) => [g, rows.map((r) => r.team)])
+    );
+    const computed = computeGroupStandings(liveMatches, groups, apiOrder);
+    const merged = { ...apiStandings };
+    for (const g of affected) if (computed[g]) merged[g] = computed[g];
+    return merged;
+  }, [apiStandings, liveMatches, groups]);
 
   /* Posiciones reales: solo grupos con al menos un partido jugado */
   const standings = useMemo(
@@ -464,6 +474,7 @@ export default function LiveTournament({
                 liveMatches={liveMatches}
                 standings={allStandings}
                 teams={teams}
+                predictions={predictions}
               />
             )
           )}

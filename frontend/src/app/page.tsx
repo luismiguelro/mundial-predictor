@@ -13,10 +13,12 @@ import {
 } from "@/lib/live";
 import Predictor      from "@/components/Predictor";
 import SimulatorTab   from "@/components/Simulator";
-import type { Bracket } from "@/lib/simulator";
+import { buildPenRates, type Bracket } from "@/lib/simulator";
 import FunFacts       from "@/components/FunFacts";
 import Groups         from "@/components/Groups";
 import Knockout       from "@/components/Knockout";
+import ChampionPath   from "@/components/ChampionPath";
+import ChampionTrend  from "@/components/ChampionTrend";
 import Glossary       from "@/components/Glossary";
 import LiveTournament from "@/components/LiveTournament";
 import Changelog      from "@/components/Changelog";
@@ -39,6 +41,8 @@ const SHELL = {
       { id: "glosario",      label: "Glosario"       },
     ],
     projByRound: "Por ronda",
+    projPath:    "Camino",
+    projTrend:   "Evolución",
     projSim:     "Simulador",
     loading:    "Cargando datos del modelo…",
     footerBy:   "por",
@@ -67,6 +71,8 @@ const SHELL = {
       { id: "glosario",      label: "Glossary"      },
     ],
     projByRound: "By round",
+    projPath:    "Path",
+    projTrend:   "Trend",
     projSim:     "Simulator",
     loading:    "Loading model data…",
     footerBy:   "by",
@@ -95,6 +101,8 @@ const SHELL = {
       { id: "glosario",      label: "Glossário"       },
     ],
     projByRound: "Por fase",
+    projPath:    "Caminho",
+    projTrend:   "Evolução",
     projSim:     "Simulador",
     loading:    "Carregando dados do modelo…",
     footerBy:   "por",
@@ -177,10 +185,15 @@ export default function Home() {
     () => (groupMatches ? buildGroupProbIndex(groupMatches) : undefined),
     [groupMatches]
   );
+  /* Tasas de penales por equipo: reparten el empate al evaluar cruces de KO. */
+  const penRates = useMemo(
+    () => (teams ? buildPenRates(teams) : undefined),
+    [teams]
+  );
   /* Modelo vs Realidad: un solo cálculo para el hero y la pestaña En Vivo */
   const verdicts     = useMemo(
-    () => (predictions ? buildVerdicts(liveMatches, predictions, groupProbIndex) : []),
-    [liveMatches, predictions, groupProbIndex]
+    () => (predictions ? buildVerdicts(liveMatches, predictions, groupProbIndex, penRates) : []),
+    [liveMatches, predictions, groupProbIndex, penRates]
   );
   const record       = useMemo(
     () => ({ played: verdicts.length, hits: verdicts.filter((v) => v.hit).length }),
@@ -361,7 +374,8 @@ export default function Home() {
                   <Projections
                     teams={teams} predictions={predictions} groups={groups}
                     fixedResults={fixedResults} liveScores={liveScores} bracket={bracket}
-                    byRoundLabel={S.projByRound} simLabel={S.projSim}
+                    liveMatches={liveMatches}
+                    byRoundLabel={S.projByRound} pathLabel={S.projPath} trendLabel={S.projTrend} simLabel={S.projSim}
                   />
                 </TabPane>
               )}
@@ -372,7 +386,7 @@ export default function Home() {
               )}
               {tab === "glosario" && (
                 <TabPane key="glosario">
-                  <Glossary />
+                  <Glossary verdicts={verdicts} />
                 </TabPane>
               )}
             </AnimatePresence>
@@ -483,24 +497,29 @@ function TournamentStatus({ S, stats, record, teams }: {
   );
 }
 
-/* ── Proyecciones: Monte Carlo por ronda + simulador manual en una sola pestaña ── */
-function Projections({ teams, predictions, groups, fixedResults, liveScores, bracket, byRoundLabel, simLabel }: {
+/* ── Proyecciones: Monte Carlo por ronda + evolución + simulador en una pestaña ── */
+function Projections({ teams, predictions, groups, fixedResults, liveScores, bracket, liveMatches, byRoundLabel, pathLabel, trendLabel, simLabel }: {
   teams: Record<string, TeamInfo>;
   predictions: Record<string, Prediction>;
   groups: Record<string, string[]>;
   fixedResults: FixedResults;
   liveScores: ScoreMap;
   bracket: Bracket | null;
+  liveMatches: LiveMatch[];
   byRoundLabel: string;
+  pathLabel: string;
+  trendLabel: string;
   simLabel: string;
 }) {
-  const [view, setView] = useState<"rondas" | "sim">("rondas");
+  const [view, setView] = useState<"rondas" | "camino" | "evolucion" | "sim">("rondas");
   return (
     <div className="space-y-5">
-      <div className="flex gap-1 bg-[var(--surface-2)] rounded-lg p-1 w-fit mx-auto">
+      <div className="flex gap-1 bg-[var(--surface-2)] rounded-lg p-1 w-fit mx-auto flex-wrap justify-center">
         {([
-          { key: "rondas" as const, label: byRoundLabel },
-          { key: "sim"    as const, label: simLabel },
+          { key: "rondas"    as const, label: byRoundLabel },
+          { key: "camino"    as const, label: pathLabel },
+          { key: "evolucion" as const, label: trendLabel },
+          { key: "sim"       as const, label: simLabel },
         ]).map(({ key, label }) => (
           <button
             key={key}
@@ -514,7 +533,11 @@ function Projections({ teams, predictions, groups, fixedResults, liveScores, bra
         ))}
       </div>
       {view === "rondas" ? (
-        <Knockout teams={teams} predictions={predictions} groups={groups} bracket={bracket} />
+        <Knockout teams={teams} predictions={predictions} groups={groups} bracket={bracket} fixedResults={fixedResults} liveScores={liveScores} />
+      ) : view === "camino" ? (
+        <ChampionPath teams={teams} predictions={predictions} groups={groups} bracket={bracket} fixedResults={fixedResults} liveScores={liveScores} />
+      ) : view === "evolucion" ? (
+        <ChampionTrend teams={teams} predictions={predictions} groups={groups} bracket={bracket} liveMatches={liveMatches} />
       ) : (
         <SimulatorTab teams={teams} predictions={predictions} groups={groups} fixedResults={fixedResults} liveScores={liveScores} bracket={bracket} />
       )}
