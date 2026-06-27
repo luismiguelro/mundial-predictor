@@ -74,3 +74,19 @@ export function applyScoreOverrides(matches: LiveMatch[]): LiveMatch[] {
     return { ...m, score1: oriented.s1, score2: oriented.s2, winner };
   });
 }
+
+/**
+ * Grupos cuya tabla quedó afectada por un override (para recalcularla desde los
+ * marcadores corregidos en vez de la tabla oficial, que aún trae el dato malo).
+ * Recibe los partidos YA corregidos por applyScoreOverrides.
+ */
+export function overriddenGroups(matches: LiveMatch[]): Set<string> {
+  const index = getIndex();
+  const out = new Set<string>();
+  if (index.size === 0) return out;
+  for (const m of matches) {
+    if (!m.group?.startsWith("Group")) continue;
+    if (index.has(`${pairKey(m.team1, m.team2)}|${utcDay(m)}`)) out.add(m.group);
+  }
+  return out;
+}
