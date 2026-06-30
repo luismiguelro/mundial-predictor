@@ -18,6 +18,8 @@ export interface TeamInfo {
 // ── Live tournament (openfootball) ─────────────────────────────────────────────
 
 export interface LiveMatch {
+  /** id del partido en football-data (orden ascendente = nº de fixture oficial) */
+  id?: number;
   team1: string;
   team2: string;
   score1: number | null;

@@ -94,8 +94,8 @@ export default function LiveTournament({
     [allStandings]
   );
 
-  /* Vista de la sección final: cuadro de eliminatorias (por defecto) o tabla */
-  const [liveView, setLiveView] = useState<"bracket" | "standings">("bracket");
+  /* Vista de la sección final: eliminatorias reales (def.) · predicción · tabla */
+  const [liveView, setLiveView] = useState<"bracket" | "predict" | "standings">("bracket");
 
   /* Próximos partidos: las siguientes 2 fechas con partidos pendientes */
   const today = new Date().toLocaleDateString("en-CA");
@@ -407,6 +407,7 @@ export default function LiveTournament({
           <div className="flex gap-1 bg-[var(--surface-2)] rounded-lg p-1 w-fit">
             {([
               { key: "bracket"   as const, label: T.lt_tabBracket },
+              { key: "predict"   as const, label: T.lt_tabPredict },
               { key: "standings" as const, label: T.lt_tabStandings },
             ]).map(({ key, label }) => (
               <button
@@ -474,12 +475,24 @@ export default function LiveTournament({
             ) : (
               <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>{T.lt_empty}</p>
             )
+          ) : bracket ? (
+            <>
+              {liveView === "predict" && (
+                <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>
+                  {T.lt_predictNote}
+                </p>
+              )}
+              <LiveBracket
+                bracket={bracket}
+                standings={allStandings}
+                liveMatches={liveMatches}
+                teams={teams}
+                predictions={predictions}
+                predict={liveView === "predict"}
+              />
+            </>
           ) : (
-            <LiveBracket
-              liveMatches={liveMatches}
-              teams={teams}
-              predictions={predictions}
-            />
+            <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>{T.lt_brWaiting}</p>
           )}
         </motion.section>
       )}

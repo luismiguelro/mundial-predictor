@@ -19,6 +19,27 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-06-30-prediccion-eliminatorias",
+    date: "2026-06-30",
+    tag: "new",
+    title: {
+      es: "Predicción de eliminatorias",
+      en: "Knockout prediction",
+      pt: "Predição do mata-mata",
+    },
+    items: {
+      es: [
+        "Nueva vista del cuadro: el modelo elige su favorito en cada cruce hasta el campeón previsto, y donde ya se jugó marca si acertó (✓) o falló (✗), con el total de aciertos.",
+      ],
+      en: [
+        "New bracket view: the model picks its favourite in each tie up to the predicted champion, and where already played it marks hit (✓) or miss (✗), with the hit total.",
+      ],
+      pt: [
+        "Nova visão do chaveamento: o modelo escolhe seu favorito em cada confronto até o campeão previsto, e onde já se jogou marca acerto (✓) ou erro (✗), com o total de acertos.",
+      ],
+    },
+  },
+  {
     id: "2026-06-29-bracket-api",
     date: "2026-06-29",
     tag: "fix",

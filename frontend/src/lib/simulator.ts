@@ -663,8 +663,15 @@ export interface BracketCrossLive {
   /** partido ya disputado (resultado real disponible) */
   played: boolean;
   state: MatchState | null;
-  /** ganador REAL que avanza, o null si aún no se jugó / faltan rivales */
+  /** ganador que avanza (real si se jugó; en modo predicción, el favorito) */
   winner: string | null;
+  /** true si `winner` es un PRONÓSTICO del modelo, no un resultado real */
+  predicted: boolean;
+  /** probabilidad de avanzar del favorito (solo en modo predicción) */
+  winProb?: number;
+  /** modo predicción: si el cruce ya se jugó, ¿el favorito previsto avanzó?
+      (true=acertó, false=falló, null=aún no jugable / equipos no coinciden) */
+  hit?: boolean | null;
 }
 
 export interface LiveBracketData {
@@ -674,67 +681,166 @@ export interface LiveBracketData {
   thirdPlace: BracketCrossLive | null;
 }
 
-/** stage de football-data → ronda del cuadro ("third" se trata aparte). */
-const STAGE_TO_ROUND: Record<string, KoRoundKey | "third"> = {
-  LAST_32: "r32",
-  LAST_16: "r16",
-  QUARTER_FINALS: "qf",
-  SEMI_FINALS: "sf",
-  FINAL: "final",
-  THIRD_PLACE: "third",
-};
+/** nº de partido oficial → ronda del cuadro. 73-88 dieciseisavos … 103 final. */
+const KO_ROUND_OF = (num: number): KoRoundKey =>
+  num <= 88 ? "r32" : num <= 96 ? "r16" : num <= 100 ? "qf" : num <= 102 ? "sf" : "final";
 
 /**
- * Cuadro eliminatorio EN VIVO directamente desde la API (football-data).
- * La fuente de verdad de QUIÉN juega contra QUIÉN, el marcador, los penales y
- * quién avanza es la API — no se infiere ni se predice nada aquí (las
- * probabilidades del modelo se pintan encima en el componente). Cada ronda se
- * llena conforme la API publica los cruces: equipo real donde ya se conoce y
- * "por definir" donde todavía no. El orden dentro de cada ronda respeta el de
- * la API, que mantiene la estructura del cuadro.
+ * Cuadro eliminatorio EN VIVO. Combina las dos fuentes correctamente:
+ *  • ESTRUCTURA (qué partido alimenta a cuál → líneas y orden de las llaves):
+ *    `bracket.json` — la topología oficial FIFA (verificada: octavos 90 = ganadores
+ *    de los partidos 73 y 75, etc.).
+ *  • EQUIPOS / marcadores / penales / quién avanza: la API (realidad). Cada
+ *    dieciseisavos se identifica por la POSICIÓN de grupo de sus slots (1A, 2B…,
+ *    resueltas con la tabla real) y el rival —incluido el mejor tercero— se ANCLA
+ *    al partido real de ese equipo en la API (no se adivina).
+ *  • Los ganadores se PROPAGAN por la topología (incluye penales vía
+ *    `MatchState.winner`): si un equipo ganó su cruce, aparece en la ronda
+ *    siguiente aunque la API aún no lo haya propagado; cuando la API lo marque,
+ *    coincide. No se predice nada: el % del modelo lo pinta el componente.
  */
 export function buildLiveBracket(
+  bracket: Bracket,
+  standings: Record<string, StandingRow[]>,
   liveMatches: LiveMatch[],
-  states: Map<string, MatchState>
+  states: Map<string, MatchState>,
+  /** modo PREDICCIÓN: si un cruce no se ha jugado, avanza el favorito del modelo
+      (mayor prob. de pasar) y se propaga hasta el campeón pronosticado. */
+  predict?: { predictions: PredictionsMap; pens: PenRates }
 ): LiveBracketData {
-  const order: KoRoundKey[] = ["r32", "r16", "qf", "sf", "final"];
-  const byRound: Record<KoRoundKey, BracketCrossLive[]> = {
-    r32: [], r16: [], qf: [], sf: [], final: [],
-  };
-  let thirdPlace: BracketCrossLive | null = null;
+  // Orden real de cada grupo (1.º..4.º) para resolver los slots 1A / 2B…
+  const order: Record<string, string[]> = {};
+  for (const [g, rows] of Object.entries(standings)) order[g] = rows.map((r) => r.team);
 
-  // Número de partido del Mundial por ronda (rango oficial 73–104): el 3.er
-  // puesto es el 103 y la final el 104.
-  const BASE: Record<KoRoundKey, number> = { r32: 73, r16: 89, qf: 97, sf: 101, final: 104 };
-
-  const slot = (team: string | null): BracketSlotLive => ({
-    team: team || null,
-    label: "",                 // sin equipo → el componente muestra "Por definir"
-    decided: !!team,
-    provisional: false,
-  });
-
-  const makeCross = (m: LiveMatch, rk: KoRoundKey, num: number): BracketCrossLive => {
-    const a = m.team1 || null;
-    const b = m.team2 || null;
-    const state = a && b ? states.get(pairKey(a, b)) ?? null : null;
-    const played = !!state && state.s1 !== null && state.s2 !== null;
-    const winner = state?.winner ?? null;
-    return { num, round: rk, a: slot(a), b: slot(b), played, state, winner };
-  };
-
+  // Cada equipo → su partido REAL de dieciseisavos (para anclar el rival/tercero).
+  const r32Match = new Map<string, LiveMatch>();
   for (const m of liveMatches) {
-    const rk = m.round ? STAGE_TO_ROUND[m.round] : undefined;
-    if (!rk) continue;
-    if (rk === "third") { thirdPlace = makeCross(m, "final", 103); continue; }
-    byRound[rk].push(makeCross(m, rk, BASE[rk] + byRound[rk].length));
+    if (m.round === "LAST_32" && m.team1 && m.team2) {
+      r32Match.set(m.team1, m); r32Match.set(m.team2, m);
+    }
+  }
+  const resolvePos = (s: Slot): string | null =>
+    s.type === "pos" ? order[s.group]?.[s.pos] ?? null : null;
+
+  const teamsByNum: Record<number, { a: string | null; b: string | null }> = {};
+  const winByNum: Record<number, string> = {};
+  const stateByNum: Record<number, MatchState | null> = {};
+  const predictedByNum: Record<number, boolean> = {};
+  const winProbByNum: Record<number, number> = {};
+  const hitByNum: Record<number, boolean> = {};
+  const setCross = (num: number, a: string | null, b: string | null) => {
+    teamsByNum[num] = { a, b };
+    const st = a && b ? states.get(pairKey(a, b)) ?? null : null;
+    stateByNum[num] = st;
+    if (predict && a && b) {
+      // Predicción INDEPENDIENTE: siempre avanza el favorito del modelo (no se
+      // mira el resultado), y si ese cruce ya se jugó se valida contra la realidad.
+      const { pa, pb } = crossWinProb(predict.predictions, a, b, predict.pens);
+      const fav = pa >= pb ? a : b;
+      winByNum[num] = fav;
+      predictedByNum[num] = true;
+      winProbByNum[num] = Math.max(pa, pb);
+      if (st?.winner) hitByNum[num] = st.winner === fav;   // ✓ acertó / ✗ falló
+    } else if (st?.winner) {
+      winByNum[num] = st.winner;                            // modo real
+    }
+  };
+
+  // Dieciseisavos (73-88): el 1.º/2.º sale de la tabla; el rival (incluido el
+  // tercero) se toma del partido REAL de ese equipo en la API (anclaje).
+  for (const c of bracket.r32) {
+    const aPos = resolvePos(c.a), bPos = resolvePos(c.b);
+    const known = aPos ?? bPos;
+    const real = known ? r32Match.get(known) : null;
+    if (real) {
+      const other = (t: string) => (real.team1 === t ? real.team2 : real.team1);
+      if (aPos) setCross(c.num, aPos, other(aPos));
+      else setCross(c.num, other(bPos!), bPos);
+    } else {
+      setCross(c.num, aPos, bPos);   // grupo aún sin cerrar → placeholders
+    }
   }
 
-  const rounds = order
-    .filter((k) => byRound[k].length > 0)
-    .map((k) => ({ key: k, crosses: byRound[k] }));
+  // Octavos → Final (89-103): cada lado es el ganador de un nº previo, propagado
+  // por la topología oficial. El estado se busca por los equipos ya resueltos.
+  const koSorted = [...bracket.ko].sort((x, y) => x.num - y.num);
+  const childrenOf: Record<number, [number, number]> = {};
+  const parentOf: Record<number, number> = {};
+  for (const c of koSorted) {
+    const ca = parseInt(c.a.slice(1), 10), cb = parseInt(c.b.slice(1), 10);
+    childrenOf[c.num] = [ca, cb]; parentOf[ca] = c.num; parentOf[cb] = c.num;
+    setCross(c.num, winByNum[ca] ?? null, winByNum[cb] ?? null);
+  }
 
-  const champion = byRound.final[0]?.winner ?? null;
+  // Construcción de cada cruce. El nodo final de bracket.json (103) se muestra
+  // como el partido 104; el 103 real es el 3.er puesto (aparte).
+  const slot = (team: string | null): BracketSlotLive => ({
+    team, label: "", decided: !!team, provisional: false,
+  });
+  const crossOf = (num: number): BracketCrossLive => {
+    const { a, b } = teamsByNum[num] ?? { a: null, b: null };
+    const st = stateByNum[num] ?? null;
+    return {
+      num: num === 103 ? 104 : num,
+      round: KO_ROUND_OF(num),
+      a: slot(a), b: slot(b),
+      played: !!st && st.s1 !== null && st.s2 !== null,
+      state: st,
+      winner: winByNum[num] ?? null,
+      predicted: !!predictedByNum[num],
+      winProb: winProbByNum[num],
+      hit: predict ? (num in hitByNum ? hitByNum[num] : null) : undefined,
+    };
+  };
 
-  return { rounds, champion, thirdPlace };
+  // Orden PLANAR del árbol (DFS desde la final) para que las llaves cuadren.
+  const finalNum = koSorted.find((c) => parentOf[c.num] === undefined)?.num
+    ?? koSorted[koSorted.length - 1]?.num ?? 103;
+  const leafOrder: number[] = [];
+  const dfs = (n: number) => {
+    const ch = childrenOf[n];
+    if (!ch) { leafOrder.push(n); return; }
+    dfs(ch[0]); dfs(ch[1]);
+  };
+  dfs(finalNum);
+
+  const roundOrder: Record<KoRoundKey, number[]> = { r32: leafOrder, r16: [], qf: [], sf: [], final: [] };
+  let cur = leafOrder;
+  for (const key of ["r16", "qf", "sf", "final"] as KoRoundKey[]) {
+    const nxt: number[] = [];
+    for (const n of cur) {
+      const p = parentOf[n];
+      if (p !== undefined && !nxt.includes(p)) nxt.push(p);
+    }
+    roundOrder[key] = nxt; cur = nxt;
+  }
+
+  const rounds = (["r32", "r16", "qf", "sf", "final"] as KoRoundKey[])
+    .map((key) => ({ key, crosses: roundOrder[key].filter((n) => n in teamsByNum).map(crossOf) }))
+    .filter((r) => r.crosses.length > 0);
+
+  // 3.er puesto: perdedores de las semis (101, 102).
+  const loserOf = (num: number): string | null => {
+    const t = teamsByNum[num], w = winByNum[num];
+    if (!t || !w) return null;
+    return t.a === w ? t.b : t.b === w ? t.a : null;
+  };
+  const l1 = loserOf(101), l2 = loserOf(102);
+  let thirdPlace: BracketCrossLive | null = null;
+  if (l1 || l2) {
+    const st = l1 && l2 ? states.get(pairKey(l1, l2)) ?? null : null;
+    let tw = st?.winner ?? null, tp = false, twp: number | undefined, th: boolean | null | undefined;
+    if (predict && l1 && l2) {
+      const { pa, pb } = crossWinProb(predict.predictions, l1, l2, predict.pens);
+      tw = pa >= pb ? l1 : l2; tp = true; twp = Math.max(pa, pb);
+      th = st?.winner ? st.winner === tw : null;
+    }
+    thirdPlace = {
+      num: 103, round: "final", a: slot(l1), b: slot(l2),
+      played: !!st && st.s1 !== null && st.s2 !== null, state: st,
+      winner: tw, predicted: tp, winProb: twp, hit: th,
+    };
+  }
+
+  return { rounds, champion: winByNum[finalNum] ?? null, thirdPlace };
 }

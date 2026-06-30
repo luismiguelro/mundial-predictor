@@ -18,6 +18,7 @@ interface FdTeam {
 
 interface FdScoreLine { home: number | null; away: number | null }
 interface FdMatch {
+  id: number;     // nº de partido oficial (orden ascendente = fixture FIFA)
   status: string; // SCHEDULED | TIMED | IN_PLAY | PAUSED | FINISHED | ...
   stage: string | null; // GROUP_STAGE | LAST_32 | LAST_16 | ...
   group: string | null; // "GROUP_A"
@@ -122,6 +123,7 @@ export async function GET() {
     }
 
     return {
+      id: m.id,
       team1: home,
       team2: away,
       score1: finished ? gameHome : null,

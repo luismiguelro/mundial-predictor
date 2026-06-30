@@ -39,6 +39,7 @@ export function normalizeName(raw: unknown): string {
 }
 
 interface ApiMatch {
+  id?: number;
   team1: string;
   team2: string;
   score1: number | null;
@@ -63,6 +64,7 @@ async function fetchFromApi(): Promise<LiveMatch[] | null> {
     const raw: ApiMatch[] = data?.matches ?? [];
     if (raw.length === 0) return null;
     return raw.map((m) => ({
+      id: m.id,
       team1: normalizeName(m.team1),
       team2: normalizeName(m.team2),
       score1: typeof m.score1 === "number" ? m.score1 : null,
