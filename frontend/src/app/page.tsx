@@ -55,6 +55,7 @@ const SHELL = {
     modelTag:   "Modelo",
     hitsLabel:  "aciertos",
     lastLabel:  "Último",
+    pens:       "pen.",
     daysSuffix: "d",
   },
   en: {
@@ -85,6 +86,7 @@ const SHELL = {
     modelTag:   "Model",
     hitsLabel:  "correct",
     lastLabel:  "Latest",
+    pens:       "pens",
     daysSuffix: "d",
   },
   pt: {
@@ -115,6 +117,7 @@ const SHELL = {
     modelTag:   "Modelo",
     hitsLabel:  "acertos",
     lastLabel:  "Último",
+    pens:       "pên.",
     daysSuffix: "d",
   },
 } as const;
@@ -491,6 +494,11 @@ function TournamentStatus({ S, stats, record, teams }: {
       {last && last.score1 !== null && last.score2 !== null && (
         <span className="status-chip">
           {S.lastLabel}: <strong>{flag(last.team1)} {last.team1} {last.score1}–{last.score2} {last.team2} {flag(last.team2)}</strong>
+          {last.penalties && (
+            <span style={{ color: "var(--wc-gold)", marginLeft: 4 }}>
+              ({S.pens} {last.penalties.home}–{last.penalties.away})
+            </span>
+          )}
         </span>
       )}
     </>
@@ -533,9 +541,9 @@ function Projections({ teams, predictions, groups, fixedResults, liveScores, bra
         ))}
       </div>
       {view === "rondas" ? (
-        <Knockout teams={teams} predictions={predictions} groups={groups} bracket={bracket} fixedResults={fixedResults} liveScores={liveScores} />
+        <Knockout teams={teams} predictions={predictions} groups={groups} bracket={bracket} fixedResults={fixedResults} liveScores={liveScores} liveMatches={liveMatches} />
       ) : view === "camino" ? (
-        <ChampionPath teams={teams} predictions={predictions} groups={groups} bracket={bracket} fixedResults={fixedResults} liveScores={liveScores} />
+        <ChampionPath teams={teams} predictions={predictions} groups={groups} bracket={bracket} fixedResults={fixedResults} liveScores={liveScores} liveMatches={liveMatches} />
       ) : view === "evolucion" ? (
         <ChampionTrend teams={teams} predictions={predictions} groups={groups} bracket={bracket} liveMatches={liveMatches} />
       ) : (

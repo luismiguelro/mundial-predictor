@@ -1,4 +1,4 @@
-import type { FixedResults, Prediction, SimResult, TeamInfo } from "@/types";
+import type { FixedResults, LiveMatch, Prediction, SimResult, TeamInfo } from "@/types";
 import type { MatchState, ScoreMap, StandingRow } from "@/lib/live";
 import { pairKey } from "@/lib/live";
 
@@ -248,6 +248,49 @@ function playKnockout(
   }
 }
 
+/* ── Realidad del mata-mata: condiciona las proyecciones a los resultados
+   reales de eliminatoria (no solo grupos). Un equipo eliminado de verdad cae a
+   0 % en las rondas que ya no puede alcanzar; uno que superó una ronda real
+   queda en 100 % en las fases ya logradas. La fuente es la API (m.round con el
+   stage y m.winner con quién avanzó, penales incluidos). ── */
+const KO_FIELDS = ["r32", "r16", "qf", "sf", "final", "champion"] as const;
+const STAGE_FIELD: Record<string, "r32" | "r16" | "qf" | "sf" | "final"> = {
+  LAST_32: "r32", LAST_16: "r16", QUARTER_FINALS: "qf", SEMI_FINALS: "sf", FINAL: "final",
+};
+
+export function applyKnockoutReality(results: SimResult[], liveMatches: LiveMatch[]): SimResult[] {
+  const reachedIdx: Record<string, number> = {};  // fase más alta garantizada (idx en KO_FIELDS)
+  const eliminated: Record<string, boolean> = {};
+  const bump = (team: string, idx: number) => {
+    if (!(team in reachedIdx) || idx > reachedIdx[team]) reachedIdx[team] = idx;
+  };
+
+  for (const m of liveMatches) {
+    const field = m.round ? STAGE_FIELD[m.round] : undefined;
+    if (!field) continue;
+    if (m.score1 === null || m.score2 === null) continue;   // solo cruces terminados
+    const t1 = m.team1, t2 = m.team2;
+    if (!t1 || !t2) continue;
+    const idx = KO_FIELDS.indexOf(field);
+    bump(t1, idx); bump(t2, idx);                            // ambos jugaron esa fase
+    const winner = m.winner ?? (m.score1 > m.score2 ? t1 : m.score2 > m.score1 ? t2 : null);
+    if (!winner) continue;                                   // empate sin desempate conocido
+    eliminated[winner === t1 ? t2 : t1] = true;
+    bump(winner, Math.min(idx + 1, KO_FIELDS.length - 1));   // el ganador llega a la siguiente
+  }
+
+  return results.map((s) => {
+    const ri = reachedIdx[s.team];
+    if (ri === undefined) return s;                          // sin partidos KO reales aún
+    const out = { ...s };
+    for (let i = 0; i < KO_FIELDS.length; i++) {
+      if (i <= ri) (out[KO_FIELDS[i]] as number) = 1;        // fase ya alcanzada con certeza
+      else if (eliminated[s.team]) (out[KO_FIELDS[i]] as number) = 0; // eliminado: 0 hacia adelante
+    }
+    return out;
+  });
+}
+
 export function runMonteCarlo(
   predictions: PredictionsMap,
   groups: Groups,
@@ -255,7 +298,9 @@ export function runMonteCarlo(
   n = 1000,
   fixedResults?: FixedResults,
   scoreMap?: ScoreMap,
-  bracket?: Bracket
+  bracket?: Bracket,
+  /** si se pasa, condiciona las proyecciones a los resultados reales del KO */
+  liveMatches?: LiveMatch[]
 ): SimResult[] {
   const allTeams = Object.values(groups).flat();
   const stages = ["r32", "r16", "qf", "sf", "final", "champion"] as const;
@@ -315,7 +360,7 @@ export function runMonteCarlo(
     }
   }
 
-  return allTeams
+  const out = allTeams
     .map((team) => ({
       team,
       flag: teams[team]?.flag ?? "🏳️",
@@ -332,8 +377,11 @@ export function runMonteCarlo(
       sf:      counts[team].sf      / n,
       final:   counts[team].final   / n,
       champion: counts[team].champion / n,
-    }))
-    .sort((a, b) => b.champion - a.champion);
+    }));
+
+  // Condicionar a los resultados reales del mata-mata (eliminados → 0 %)
+  const adjusted = liveMatches ? applyKnockoutReality(out, liveMatches) : out;
+  return adjusted.sort((a, b) => b.champion - a.champion);
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -370,6 +418,28 @@ function roundOfNum(num: number): TeamPathRound["round"] {
   return "final";
 }
 
+/** Estado real del mata-mata de un equipo: hasta qué ronda jugó, cuáles ganó y
+    si ya está eliminado (desde la API, penales incluidos vía m.winner). */
+const PATH_ROUNDS = ["r32", "r16", "qf", "sf", "final"] as const;
+function teamKoState(team: string, liveMatches: LiveMatch[]) {
+  let playedIdx = -1;
+  const wonAt = new Set<number>();
+  let eliminated = false;
+  for (const m of liveMatches) {
+    const field = m.round ? STAGE_FIELD[m.round] : undefined;
+    if (!field) continue;
+    if (m.score1 === null || m.score2 === null) continue;
+    if (m.team1 !== team && m.team2 !== team) continue;
+    const i = (PATH_ROUNDS as readonly string[]).indexOf(field);
+    if (i < 0) continue;
+    if (i > playedIdx) playedIdx = i;
+    const winner = m.winner ?? (m.score1 > m.score2 ? m.team1 : m.score2 > m.score1 ? m.team2 : null);
+    if (winner === team) wonAt.add(i);
+    else if (winner) eliminated = true;
+  }
+  return { playedIdx, wonAt, eliminated };
+}
+
 export function simulateTeamPath(
   team: string,
   predictions: PredictionsMap,
@@ -378,7 +448,9 @@ export function simulateTeamPath(
   bracket: Bracket,
   n = 2000,
   fixedResults?: FixedResults,
-  scoreMap?: ScoreMap
+  scoreMap?: ScoreMap,
+  /** si se pasa, condiciona el camino a los resultados reales del KO */
+  liveMatches?: LiveMatch[]
 ): TeamPath {
   const allTeams = Object.values(groups).flat();
   const elos = Object.fromEntries(allTeams.map((t) => [t, teams[t]?.elo ?? 1500]));
@@ -453,7 +525,28 @@ export function simulateTeamPath(
     };
   });
 
-  return { team, rounds, champion: adv.final / n };
+  let champion = adv.final / n;
+
+  // Condicionar el camino a la realidad del KO: fases ya superadas → 100 %,
+  // fases inalcanzables tras una eliminación → 0 % (igual que «Por ronda»).
+  if (liveMatches) {
+    const { playedIdx, wonAt, eliminated } = teamKoState(team, liveMatches);
+    if (playedIdx >= 0) {
+      for (let i = 0; i < rounds.length; i++) {
+        if (i <= playedIdx) {
+          rounds[i].reach = 1;
+          if (wonAt.has(i)) { rounds[i].advance = 1; rounds[i].condAdvance = 1; }
+          else if (i === playedIdx && eliminated) { rounds[i].advance = 0; rounds[i].condAdvance = 0; }
+        } else if (eliminated) {
+          rounds[i].reach = 0; rounds[i].advance = 0; rounds[i].condAdvance = 0;
+        }
+      }
+      if (eliminated) champion = 0;
+      else if (wonAt.has(4)) champion = 1;   // ganó la final
+    }
+  }
+
+  return { team, rounds, champion };
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -577,99 +670,71 @@ export interface BracketCrossLive {
 export interface LiveBracketData {
   rounds: { key: KoRoundKey; crosses: BracketCrossLive[] }[];
   champion: string | null;
+  /** partido por el 3.er puesto (perdedores de semis); aparte del árbol */
+  thirdPlace: BracketCrossLive | null;
 }
 
-const KO_ROUND_OF = (num: number): KoRoundKey =>
-  num <= 96 ? "r16" : num <= 100 ? "qf" : num <= 102 ? "sf" : "final";
+/** stage de football-data → ronda del cuadro ("third" se trata aparte). */
+const STAGE_TO_ROUND: Record<string, KoRoundKey | "third"> = {
+  LAST_32: "r32",
+  LAST_16: "r16",
+  QUARTER_FINALS: "qf",
+  SEMI_FINALS: "sf",
+  FINAL: "final",
+  THIRD_PLACE: "third",
+};
 
 /**
- * Cuadro eliminatorio en vivo (R32 → Final): ubica los equipos según la tabla
- * real (1.º/2.º provisionales hasta cerrar el grupo; mejores 8 terceros al
- * terminar los 12 grupos) y avanza SOLO con resultados reales — sin predecir.
+ * Cuadro eliminatorio EN VIVO directamente desde la API (football-data).
+ * La fuente de verdad de QUIÉN juega contra QUIÉN, el marcador, los penales y
+ * quién avanza es la API — no se infiere ni se predice nada aquí (las
+ * probabilidades del modelo se pintan encima en el componente). Cada ronda se
+ * llena conforme la API publica los cruces: equipo real donde ya se conoce y
+ * "por definir" donde todavía no. El orden dentro de cada ronda respeta el de
+ * la API, que mantiene la estructura del cuadro.
  */
 export function buildLiveBracket(
-  bracket: Bracket,
-  standings: Record<string, StandingRow[]>,
+  liveMatches: LiveMatch[],
   states: Map<string, MatchState>
 ): LiveBracketData {
-  const r32 = projectBracket(bracket, standings);
-
-  const winByNum: Record<number, string> = {};
-  const realByNum: Record<number, boolean> = {};
-  const crossByRound: Record<KoRoundKey, BracketCrossLive[]> = {
+  const order: KoRoundKey[] = ["r32", "r16", "qf", "sf", "final"];
+  const byRound: Record<KoRoundKey, BracketCrossLive[]> = {
     r32: [], r16: [], qf: [], sf: [], final: [],
   };
+  let thirdPlace: BracketCrossLive | null = null;
 
-  const resolveCross = (
-    num: number, round: KoRoundKey, a: BracketSlotLive, b: BracketSlotLive
-  ): BracketCrossLive => {
-    const state = a.team && b.team ? states.get(pairKey(a.team, b.team)) ?? null : null;
+  // Número de partido del Mundial por ronda (rango oficial 73–104): el 3.er
+  // puesto es el 103 y la final el 104.
+  const BASE: Record<KoRoundKey, number> = { r32: 73, r16: 89, qf: 97, sf: 101, final: 104 };
+
+  const slot = (team: string | null): BracketSlotLive => ({
+    team: team || null,
+    label: "",                 // sin equipo → el componente muestra "Por definir"
+    decided: !!team,
+    provisional: false,
+  });
+
+  const makeCross = (m: LiveMatch, rk: KoRoundKey, num: number): BracketCrossLive => {
+    const a = m.team1 || null;
+    const b = m.team2 || null;
+    const state = a && b ? states.get(pairKey(a, b)) ?? null : null;
     const played = !!state && state.s1 !== null && state.s2 !== null;
-    const winner = state?.winner ?? null;       // solo resultado real
-    if (winner) { winByNum[num] = winner; realByNum[num] = true; }
-    return { num, round, a, b, played, state, winner };
+    const winner = state?.winner ?? null;
+    return { num, round: rk, a: slot(a), b: slot(b), played, state, winner };
   };
 
-  // R32: slots desde la tabla real (provisional hasta que cierre el grupo)
-  for (const c of r32) {
-    const slot = (s: typeof c.a): BracketSlotLive => ({
-      team: s.team, label: s.label, decided: s.decided, provisional: !!s.team && !s.decided,
-    });
-    crossByRound.r32.push(resolveCross(c.num, "r32", slot(c.a), slot(c.b)));
+  for (const m of liveMatches) {
+    const rk = m.round ? STAGE_TO_ROUND[m.round] : undefined;
+    if (!rk) continue;
+    if (rk === "third") { thirdPlace = makeCross(m, "final", 103); continue; }
+    byRound[rk].push(makeCross(m, rk, BASE[rk] + byRound[rk].length));
   }
 
-  // R16 → Final: cada lado es el ganador REAL de un cruce anterior (o "Por definir").
-  // De paso mapeamos el árbol (qué cruce alimenta a cuál) para ordenar las rondas
-  // de forma PLANAR — los rivales reales quedan adyacentes y los conectores cuadran.
-  const koSorted = [...bracket.ko].sort((x, y) => x.num - y.num);
-  const childrenOf: Record<number, [number, number]> = {};
-  const parentOf: Record<number, number> = {};
-  for (const c of koSorted) {
-    const ca = parseInt(c.a.slice(1), 10);
-    const cb = parseInt(c.b.slice(1), 10);
-    childrenOf[c.num] = [ca, cb];
-    parentOf[ca] = c.num; parentOf[cb] = c.num;
-    const ref = (n: number): BracketSlotLive => {
-      const team = winByNum[n] ?? null;
-      return { team, label: `W${n}`, decided: !!realByNum[n], provisional: false };
-    };
-    crossByRound[KO_ROUND_OF(c.num)].push(resolveCross(c.num, KO_ROUND_OF(c.num), ref(ca), ref(cb)));
-  }
+  const rounds = order
+    .filter((k) => byRound[k].length > 0)
+    .map((k) => ({ key: k, crosses: byRound[k] }));
 
-  // La final es el único cruce sin padre; recorremos el árbol para fijar el orden
-  const finalNum = koSorted.length
-    ? koSorted.map((c) => c.num).find((n) => parentOf[n] === undefined) ?? koSorted[koSorted.length - 1].num
-    : 0;
-  const leafOrder: number[] = [];
-  const dfs = (n: number) => {
-    const ch = childrenOf[n];
-    if (!ch) { leafOrder.push(n); return; }
-    dfs(ch[0]); dfs(ch[1]);
-  };
-  if (finalNum) dfs(finalNum);
+  const champion = byRound.final[0]?.winner ?? null;
 
-  // Orden por ronda: las hojas (R32) en orden planar, y cada ronda siguiente
-  // = los padres de la ronda previa, sin repetir (conserva la adyacencia).
-  const roundOrder: Record<KoRoundKey, number[]> = { r32: leafOrder, r16: [], qf: [], sf: [], final: [] };
-  let cur = leafOrder;
-  for (const key of ["r16", "qf", "sf", "final"] as KoRoundKey[]) {
-    const nxt: number[] = [];
-    for (const n of cur) {
-      const p = parentOf[n];
-      if (p !== undefined && !nxt.includes(p)) nxt.push(p);
-    }
-    roundOrder[key] = nxt;
-    cur = nxt;
-  }
-
-  const rank = (key: KoRoundKey, num: number) => {
-    const i = roundOrder[key].indexOf(num);
-    return i === -1 ? num : i;
-  };
-  const rounds = (["r32", "r16", "qf", "sf", "final"] as KoRoundKey[]).map((key) => ({
-    key,
-    crosses: crossByRound[key].sort((x, y) => rank(key, x.num) - rank(key, y.num)),
-  }));
-
-  return { rounds, champion: winByNum[finalNum] ?? null };
+  return { rounds, champion, thirdPlace };
 }

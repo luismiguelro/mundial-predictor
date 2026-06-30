@@ -65,9 +65,14 @@ export default function CrossDetail({
 
   /* marcador real orientado (a, b) si ya se jugó */
   let realA: number | null = null, realB: number | null = null;
+  let penA: number | null = null, penB: number | null = null;
   if (real && real.s1 !== null && real.s2 !== null) {
     realA = real.team1 === a ? real.s1 : real.s2;
     realB = real.team1 === a ? real.s2 : real.s1;
+    if (real.decidedBy === "PENALTY_SHOOTOUT") {
+      penA = real.team1 === a ? real.pen1 : real.pen2;
+      penB = real.team1 === a ? real.pen2 : real.pen1;
+    }
   }
 
   return (
@@ -175,6 +180,9 @@ export default function CrossDetail({
               </span>
               <span className="text-sm font-bold tabular-nums">
                 {realA}–{realB}
+                {penA !== null && penB !== null && (
+                  <span className="ml-1 text-[var(--wc-gold)] font-semibold">({T.lt_pens} {penA}–{penB})</span>
+                )}
                 {realWinner && <span className="ml-2 text-[var(--text-muted)] font-normal">· {flag(realWinner)} {realWinner}</span>}
               </span>
             </div>

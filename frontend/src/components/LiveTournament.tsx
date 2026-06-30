@@ -42,7 +42,7 @@ export default function LiveTournament({
   const ROUND_LABEL: Record<string, string> = {
     LAST_32: T.roundOf32, LAST_16: T.roundOf16,
     QUARTER_FINALS: T.quarterFinal, SEMI_FINALS: T.semiFinal,
-    THIRD_PLACE: "3°", FINAL: T.final,
+    THIRD_PLACE: T.lt_brThird, FINAL: T.final,
   };
   const stageLabel = (m: LiveMatch) =>
     m.group?.startsWith("Group")
@@ -94,8 +94,8 @@ export default function LiveTournament({
     [allStandings]
   );
 
-  /* Vista de la sección final: tabla de posiciones o cuadro de eliminatorias */
-  const [liveView, setLiveView] = useState<"standings" | "bracket">("standings");
+  /* Vista de la sección final: cuadro de eliminatorias (por defecto) o tabla */
+  const [liveView, setLiveView] = useState<"bracket" | "standings">("bracket");
 
   /* Próximos partidos: las siguientes 2 fechas con partidos pendientes */
   const today = new Date().toLocaleDateString("en-CA");
@@ -290,7 +290,14 @@ export default function LiveTournament({
                       <span className="flex-1 min-w-0 text-right text-sm font-bold truncate">
                         {flag(m.team1)} {m.team1}
                       </span>
-                      <span className="score-final shrink-0 px-1">{m.score1}–{m.score2}</span>
+                      <span className="score-final shrink-0 px-1">
+                        {m.score1}–{m.score2}
+                        {m.penalties && (
+                          <span className="text-[10px] align-top" style={{ color: "var(--wc-gold)" }}>
+                            {" "}({T.lt_pens} {m.penalties.home}–{m.penalties.away})
+                          </span>
+                        )}
+                      </span>
                       <span className="flex-1 min-w-0 text-sm font-bold truncate">
                         {m.team2} {flag(m.team2)}
                       </span>
@@ -399,8 +406,8 @@ export default function LiveTournament({
         <motion.section variants={fadeUp} className="space-y-3">
           <div className="flex gap-1 bg-[var(--surface-2)] rounded-lg p-1 w-fit">
             {([
-              { key: "standings" as const, label: T.lt_tabStandings },
               { key: "bracket"   as const, label: T.lt_tabBracket },
+              { key: "standings" as const, label: T.lt_tabStandings },
             ]).map(({ key, label }) => (
               <button
                 key={key}
@@ -468,15 +475,11 @@ export default function LiveTournament({
               <p className="text-sm text-center py-6" style={{ color: "var(--text-muted)" }}>{T.lt_empty}</p>
             )
           ) : (
-            bracket && (
-              <LiveBracket
-                bracket={bracket}
-                liveMatches={liveMatches}
-                standings={allStandings}
-                teams={teams}
-                predictions={predictions}
-              />
-            )
+            <LiveBracket
+              liveMatches={liveMatches}
+              teams={teams}
+              predictions={predictions}
+            />
           )}
         </motion.section>
       )}

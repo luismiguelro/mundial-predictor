@@ -2,20 +2,18 @@
 
 import { useMemo, useState } from "react";
 import type { TeamInfo, LiveMatch, Prediction } from "@/types";
-import { buildMatchStates, type StandingRow } from "@/lib/live";
+import { buildMatchStates } from "@/lib/live";
 import {
   buildLiveBracket, buildPenRates, crossWinProb,
-  type Bracket, type BracketCrossLive,
+  type BracketCrossLive,
   type BracketSlotLive, type KoRoundKey,
 } from "@/lib/simulator";
 import { useLang } from "@/lib/i18n";
 import CrossDetail from "@/components/CrossDetail";
 
 interface Props {
-  bracket: Bracket;
+  /** partidos reales (incluye eliminatoria): fuente de los cruces y resultados */
   liveMatches: LiveMatch[];
-  /** tabla por grupo, ya ordenada (oficial de la API o calculada) */
-  standings: Record<string, StandingRow[]>;
   teams: Record<string, TeamInfo>;
   /** probabilidades del modelo para anotar cada cruce sin jugar */
   predictions: Record<string, Prediction>;
@@ -48,17 +46,16 @@ function roundLabel(key: KoRoundKey, T: T): string {
     : T.lt_brFinal;
 }
 
-/** Prettifica el placeholder de un slot ("W89" → "Ganador #89"; "3.º …" se deja). */
+/** Etiqueta del slot sin equipo: siempre "Por definir" (los cruces salen de la API). */
 function slotLabel(s: BracketSlotLive, T: T): string {
-  const m = /^W(\d+)$/.exec(s.label);
-  return m ? `${T.lt_brWinnerOf} #${m[1]}` : s.label;
+  return s.label || T.lt_brTbd;
 }
 
-export default function LiveBracket({ bracket, liveMatches, standings, teams, predictions }: Props) {
+export default function LiveBracket({ liveMatches, teams, predictions }: Props) {
   const T = useLang();
 
   const states = useMemo(() => buildMatchStates(liveMatches), [liveMatches]);
-  const data = useMemo(() => buildLiveBracket(bracket, standings, states), [bracket, standings, states]);
+  const data = useMemo(() => buildLiveBracket(liveMatches, states), [liveMatches, states]);
   const penRates = useMemo(() => buildPenRates(teams), [teams]);
   const [sel, setSel] = useState<BracketCrossLive | null>(null);
 
@@ -92,6 +89,7 @@ export default function LiveBracket({ bracket, liveMatches, standings, teams, pr
             </div>
           </div>
         </div>
+
         {/* indicador de scroll (sobre todo para mobile) */}
         <span className="text-[10px] sm:hidden" style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
           {T.lt_brScrollHint} →
@@ -134,6 +132,22 @@ export default function LiveBracket({ bracket, liveMatches, standings, teams, pr
           })}
         </div>
       </div>
+
+      {/* Partido por el 3.er puesto (perdedores de semis): fuera del árbol */}
+      {data.thirdPlace && (
+        <div className="pt-1">
+          <div className="text-[10px] font-bold uppercase tracking-[0.1em] mb-1.5 flex items-center gap-1.5"
+               style={{ fontFamily: "var(--font-mono)", color: "#cd7f32" }}>
+            🥉 {T.lt_brThird} <span style={{ color: "var(--text-muted)" }}>· #{data.thirdPlace.num}</span>
+          </div>
+          <div style={{ width: COL_W }}>
+            <CrossCard
+              c={data.thirdPlace} flag={flag} T={T} predictions={predictions} pens={penRates}
+              onOpen={data.thirdPlace.a.team && data.thirdPlace.b.team ? () => setSel(data.thirdPlace) : undefined}
+            />
+          </div>
+        </div>
+      )}
 
       {sel && sel.a.team && sel.b.team && (
         <CrossDetail
@@ -223,8 +237,12 @@ function SlotRow({ side, c, flag, T, winProb }: {
   const slot = c[side];
   const isWinner = !!slot.team && c.winner === slot.team;
   let myScore: number | null = null;
+  let myPen: number | null = null;
   if (c.played && c.state && slot.team) {
     myScore = c.state.team1 === slot.team ? c.state.s1 : c.state.s2;
+    if (c.state.decidedBy === "PENALTY_SHOOTOUT") {
+      myPen = c.state.team1 === slot.team ? c.state.pen1 : c.state.pen2;
+    }
   }
   const showProb = winProb !== null && !!slot.team;
 
@@ -249,9 +267,14 @@ function SlotRow({ side, c, flag, T, winProb }: {
                   title={T.lt_provisional} />
           )}
           {myScore !== null && (
-            <span className="text-xs font-bold tabular-nums shrink-0 w-3 text-right"
+            <span className="text-xs font-bold tabular-nums shrink-0 text-right flex items-baseline gap-0.5"
                   style={{ color: isWinner ? WIN_LINE : "var(--text-muted)" }}>
               {myScore}
+              {myPen !== null && (
+                <span className="text-[9px] font-semibold" style={{ color: "var(--wc-gold)" }}>
+                  ({myPen})
+                </span>
+              )}
             </span>
           )}
           {showProb && (

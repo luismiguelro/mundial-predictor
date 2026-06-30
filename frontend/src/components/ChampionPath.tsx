@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useTransition } from "react";
-import type { TeamInfo, Prediction, FixedResults } from "@/types";
+import type { TeamInfo, Prediction, FixedResults, LiveMatch } from "@/types";
 import type { ScoreMap } from "@/lib/live";
 import { simulateTeamPath, type Bracket, type TeamPath, type TeamPathRound } from "@/lib/simulator";
 import { useLang } from "@/lib/i18n";
@@ -13,6 +13,8 @@ interface Props {
   bracket?: Bracket | null;
   fixedResults?: FixedResults;
   liveScores?: ScoreMap;
+  /** Partidos reales (incl. KO): condicionan el camino a lo ya jugado. */
+  liveMatches?: LiveMatch[];
 }
 
 const N_SIMS = 2000;
@@ -27,7 +29,7 @@ const ROUND_META: Record<TeamPathRound["round"], { accent: string }> = {
 
 function pct(v: number, d = 0) { return `${(v * 100).toFixed(d)}%`; }
 
-export default function ChampionPath({ teams, predictions, groups, bracket, fixedResults, liveScores }: Props) {
+export default function ChampionPath({ teams, predictions, groups, bracket, fixedResults, liveScores, liveMatches }: Props) {
   const T = useLang();
 
   const roster = useMemo(
@@ -49,10 +51,10 @@ export default function ChampionPath({ teams, predictions, groups, bracket, fixe
   useEffect(() => {
     if (!team || !bracket) { setPath(null); return; }
     startTransition(() => {
-      setPath(simulateTeamPath(team, predictions, groups, teams, bracket, N_SIMS, fixedResults, liveScores));
+      setPath(simulateTeamPath(team, predictions, groups, teams, bracket, N_SIMS, fixedResults, liveScores, liveMatches));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [team, bracket, fixedResults, liveScores]);
+  }, [team, bracket, fixedResults, liveScores, liveMatches]);
 
   const roundLabel = (r: TeamPathRound["round"]) =>
     r === "r32" ? T.roundOf32 : r === "r16" ? T.roundOf16 : r === "qf" ? T.quarterFinal

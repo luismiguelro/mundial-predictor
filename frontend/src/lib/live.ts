@@ -50,6 +50,8 @@ interface ApiMatch {
   utcDate?: string | null;
   status?: string;
   winner?: string | null;
+  penalties?: { home: number; away: number } | null;
+  decidedBy?: string | null;
 }
 
 /** Fuente primaria: football-data.org vía nuestro route handler. */
@@ -74,6 +76,8 @@ async function fetchFromApi(): Promise<LiveMatch[] | null> {
       status: m.status,
       utc: m.utcDate ?? undefined,
       winner: m.winner ?? null,
+      penalties: m.penalties ?? null,
+      decidedBy: m.decidedBy ?? null,
     }));
   } catch {
     return null;
@@ -186,6 +190,11 @@ export interface MatchState {
   status?: string;
   /** ganador real del cruce, o null si empate/no resuelto */
   winner: string | null;
+  /** tanda de penales orientada a team1/team2 (null si no hubo) */
+  pen1: number | null;
+  pen2: number | null;
+  /** REGULAR | EXTRA_TIME | PENALTY_SHOOTOUT (null si no terminó) */
+  decidedBy: string | null;
 }
 
 export function buildMatchStates(matches: LiveMatch[]): Map<string, MatchState> {
@@ -205,6 +214,10 @@ export function buildMatchStates(matches: LiveMatch[]): Map<string, MatchState> 
       live2: m.liveScore2 ?? null,
       status: m.status,
       winner,
+      // penalties viene orientado home/away = team1/team2 del partido (= MatchState.team1)
+      pen1: m.penalties?.home ?? null,
+      pen2: m.penalties?.away ?? null,
+      decidedBy: m.decidedBy ?? null,
     });
   }
   return out;
@@ -317,6 +330,8 @@ export function predictedOutcome(p: Probs3): "t1" | "draw" | "t2" {
  * Si pronosticamos EMPATE (partido parejo) y NO termina en empate, igual cuenta
  * como acierto si gana el equipo con mayor probabilidad de ganar — solo fallamos
  * si lo gana el menos probable (un batacazo). Para no-empate, acierto estricto.
+ * Además: en cualquier partido PAREJO (avisamos "empate muy probable") un empate
+ * real cuenta como acierto, aunque hubiéramos marcado un favorito leve.
  */
 export function evaluatePrediction(
   p: Probs3,
@@ -327,6 +342,8 @@ export function evaluatePrediction(
     const favorite = p.t1 >= p.t2 ? "t1" : "t2";
     return { predicted, hit: actual === "draw" || actual === favorite };
   }
+  // Partido parejo: si empata, es acierto (coherente con el aviso "empate muy probable").
+  if (isTightMatch(p) && actual === "draw") return { predicted, hit: true };
   return { predicted, hit: predicted === actual };
 }
 

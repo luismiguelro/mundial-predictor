@@ -36,6 +36,11 @@ export interface LiveMatch {
   /** ganador real del cruce (incluye desempate por penales); null si empate/no terminado.
       Solo vía API football-data; usado para resolver el cuadro eliminatorio. */
   winner?: string | null;
+  /** desempate por penales, orientado a team1/team2 (null si no hubo tanda).
+      score1/score2 guardan el marcador del JUEGO (90'+prórroga), sin la tanda. */
+  penalties?: { home: number; away: number } | null;
+  /** cómo se decidió un cruce terminado: REGULAR | EXTRA_TIME | PENALTY_SHOOTOUT */
+  decidedBy?: string | null;
 }
 
 /** clave canónica "A|B" (orden alfabético) → ganador o null si empate */

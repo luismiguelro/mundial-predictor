@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition, useMemo } from "react";
-import type { TeamInfo, Prediction, SimResult, FixedResults } from "@/types";
+import type { TeamInfo, Prediction, SimResult, FixedResults, LiveMatch } from "@/types";
 import type { ScoreMap } from "@/lib/live";
 import { runMonteCarlo, type Bracket } from "@/lib/simulator";
 import { useLang } from "@/lib/i18n";
@@ -14,6 +14,8 @@ interface Props {
   /** Resultados reales de grupos: condicionan el Monte Carlo a lo ya jugado. */
   fixedResults?: FixedResults;
   liveScores?: ScoreMap;
+  /** Partidos reales (incl. KO): llevan las proyecciones a 0 % en los eliminados. */
+  liveMatches?: LiveMatch[];
 }
 
 const LATAM = new Set([
@@ -27,7 +29,7 @@ function pct(v: number, decimals = 1) {
   return `${(v * 100).toFixed(decimals)}%`;
 }
 
-export default function Knockout({ teams, predictions, groups, bracket, fixedResults, liveScores }: Props) {
+export default function Knockout({ teams, predictions, groups, bracket, fixedResults, liveScores, liveMatches }: Props) {
   const T = useLang();
 
   const ROUNDS = useMemo(() => [
@@ -47,10 +49,10 @@ export default function Knockout({ teams, predictions, groups, bracket, fixedRes
 
   useEffect(() => {
     startTransition(() => {
-      setResults(runMonteCarlo(predictions, groups, teams, N_SIMS, fixedResults, liveScores, bracket ?? undefined));
+      setResults(runMonteCarlo(predictions, groups, teams, N_SIMS, fixedResults, liveScores, bracket ?? undefined, liveMatches));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bracket, fixedResults, liveScores]);
+  }, [bracket, fixedResults, liveScores, liveMatches]);
 
   const round = ROUNDS.find((r) => r.key === selected) ?? ROUNDS[1];
 

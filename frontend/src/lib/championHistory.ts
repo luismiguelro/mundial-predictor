@@ -36,11 +36,12 @@ export function buildChampionTrend(
   liveMatches: LiveMatch[],
   n = 1200,
 ): TrendPoint[] {
-  // Partidos de grupo ya jugados, con fecha (los que condicionan el modelo).
-  const playedGroup = liveMatches.filter(
-    (m) => m.group?.startsWith("Group") && m.score1 !== null && m.score2 !== null && m.date,
+  // Partidos ya jugados con fecha (grupos + eliminatoria): definen los cortes
+  // y condicionan el modelo —los grupos vía marcador real, el KO vía quién avanzó.
+  const played = liveMatches.filter(
+    (m) => m.score1 !== null && m.score2 !== null && m.date,
   );
-  const dates = [...new Set(playedGroup.map((m) => m.date!))].sort();
+  const dates = [...new Set(played.map((m) => m.date!))].sort();
   if (dates.length === 0) return []; // aún no hay nada que mostrar
 
   // Cortes: pretorneo + cada fecha jugada. Si hay demasiadas fechas,
@@ -56,10 +57,12 @@ export function buildChampionTrend(
 
   const points: TrendPoint[] = [];
   for (const cut of cutDates) {
-    const upTo = cut === null ? [] : playedGroup.filter((m) => m.date! <= cut);
+    const upTo = cut === null ? [] : played.filter((m) => m.date! <= cut);
+    // buildFixedResults/buildScoreMap ya filtran solo grupos; el KO de `upTo`
+    // se aplica vía runMonteCarlo (8.º arg) → 0 % a los eliminados a esa fecha.
     const fixed = buildFixedResults(upTo);
     const scoreMap = buildScoreMap(upTo);
-    const sims = runMonteCarlo(predictions, groups, teams, n, fixed, scoreMap, bracket ?? undefined);
+    const sims = runMonteCarlo(predictions, groups, teams, n, fixed, scoreMap, bracket ?? undefined, upTo);
     const champ: Record<string, number> = {};
     for (const s of sims) champ[s.team] = s.champion;
     points.push({ date: cut, played: upTo.length, champ });

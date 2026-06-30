@@ -19,6 +19,54 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-06-29-bracket-api",
+    date: "2026-06-29",
+    tag: "fix",
+    title: {
+      es: "Cuadro de eliminatorias con los cruces reales (y penales)",
+      en: "Knockout bracket with the real ties (and penalties)",
+      pt: "Chaveamento do mata-mata com os confrontos reais (e pênaltis)",
+    },
+    items: {
+      es: [
+        "El cuadro de eliminatorias toma cruces, marcadores y penales de la fuente oficial (corrige cruces inventados).",
+        "Penales con el marcador de cada equipo, rondas con su nombre real (16vos · 8vos · 4tos…) y partido por el 3.er puesto.",
+        "Las proyecciones ya ponen 0 % a los eliminados y 100 % a quien superó su cruce.",
+      ],
+      en: [
+        "The knockout bracket pulls ties, scores and penalties from the official feed (fixes made-up ties).",
+        "Penalty scores per team, rounds with their real names (R32 · R16 · QF…) and a third-place match.",
+        "Projections now show 0% for eliminated teams and 100% for those who advanced.",
+      ],
+      pt: [
+        "O chaveamento puxa confrontos, placares e pênaltis da fonte oficial (corrige confrontos inventados).",
+        "Pênaltis por time, fases com nome real (16-avos · Oitavas · Quartas…) e disputa de 3º lugar.",
+        "As projeções já mostram 0% para os eliminados e 100% para quem avançou.",
+      ],
+    },
+  },
+  {
+    id: "2026-06-26-empate-parejo-acierto",
+    date: "2026-06-26",
+    tag: "fix",
+    title: {
+      es: "Empate en partido parejo ahora cuenta como acierto",
+      en: "A draw in a tight match now counts as a hit",
+      pt: "Empate em jogo equilibrado agora conta como acerto",
+    },
+    items: {
+      es: [
+        "Si un partido se marca como «parejo · empate muy probable» y termina empatado, ahora se cuenta como ACIERTO (✓), igual que los demás — antes podía marcarse como fallo si el modelo tenía un favorito leve.",
+      ],
+      en: [
+        "If a match is flagged as “tight · draw very likely” and ends in a draw, it now counts as a HIT (✓) like the rest — before it could be marked as a miss when the model had a slight favourite.",
+      ],
+      pt: [
+        "Se um jogo é marcado como «equilibrado · empate muito provável» e termina empatado, agora conta como ACERTO (✓), como os demais — antes podia ser marcado como erro quando o modelo tinha um favorito leve.",
+      ],
+    },
+  },
+  {
     id: "2026-06-26-modelo-goles",
     date: "2026-06-26",
     tag: "improve",
