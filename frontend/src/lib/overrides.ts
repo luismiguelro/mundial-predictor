@@ -25,9 +25,8 @@ export interface ScoreOverride {
 }
 
 export const SCORE_OVERRIDES: ScoreOverride[] = [
-  // football-data marcó 5–0; el resultado real fue 4–0 (3 de España + autogol
-  // de Al-Tambakti). Borrar cuando la API se corrija.
-  { team1: "Spain", team2: "Saudi Arabia", date: "2026-06-21", score1: 4, score2: 0 },
+  // (vacío) — el override de España 4–0 vs Arabia Saudita (2026-06-21) se retiró
+  // el 2026-07-01: football-data ya devuelve el marcador correcto.
 ];
 
 /** Índice por par de equipos + día, con el marcador orientado a su team1.

@@ -1,14 +1,13 @@
-pandas>=2.0
-scikit-learn>=1.4
-scipy>=1.11
-xgboost>=2.0
-streamlit>=1.35
-plotly>=5.20
-joblib
-pytest>=8.0
-numpy>=1.26
-openpyxl
-pyarrow
-kagglehub
-python-dotenv
-requests
+# Pipeline + tests (Python 3.14) — versiones fijadas al entorno validado (.venv).
+pandas==3.0.3
+scikit-learn==1.9.0
+scipy==1.17.1
+xgboost==3.2.0
+numpy==2.4.6
+joblib==1.5.3
+pyarrow==24.0.0
+requests==2.34.2
+pytest==9.0.3
+
+# Solo para la demo legacy (legacy/app.py) y los notebooks de EDA — no los
+# instala el CI: pip install streamlit plotly

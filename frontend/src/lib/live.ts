@@ -225,37 +225,6 @@ export function buildMatchStates(matches: LiveMatch[]): Map<string, MatchState> 
   return out;
 }
 
-/* ── Forma de cada equipo en ESTE Mundial (solo resultados V/E/D) ──
-   Insumo para ajustar la predicción de las eliminatorias: cuánto rinde cada
-   selección respecto a lo esperado, medido por su saldo de victorias/derrotas
-   en lo que lleva jugado (grupos + eliminatorias). No usa goles esperados. */
-export interface TeamForm {
-  played: number;
-  won: number;
-  drawn: number;
-  lost: number;
-  /** saldo de resultados (victorias − derrotas); base del ajuste de forma */
-  net: number;
-}
-
-export function buildForm(matches: LiveMatch[]): Record<string, TeamForm> {
-  const out: Record<string, TeamForm> = {};
-  const ensure = (t: string) => (out[t] ??= { played: 0, won: 0, drawn: 0, lost: 0, net: 0 });
-  for (const m of matches) {
-    if (m.score1 === null || m.score2 === null) continue;
-    if (!m.team1 || !m.team2) continue;
-    const a = ensure(m.team1), b = ensure(m.team2);
-    a.played++; b.played++;
-    // ganador real (incluye penales en knockout vía m.winner)
-    const w = m.winner ?? (m.score1 > m.score2 ? m.team1 : m.score2 > m.score1 ? m.team2 : null);
-    if (w === m.team1)      { a.won++; b.lost++; }
-    else if (w === m.team2) { b.won++; a.lost++; }
-    else                    { a.drawn++; b.drawn++; }
-  }
-  for (const f of Object.values(out)) f.net = f.won - f.lost;
-  return out;
-}
-
 /* ── Stats agregadas del torneo en curso (todas las fases) ── */
 export interface LiveStats {
   played: number;

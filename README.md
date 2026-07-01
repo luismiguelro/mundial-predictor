@@ -2,7 +2,7 @@
 
 Predictor de resultados del **Mundial FIFA 2026** con Machine Learning: modelo de goles **Dixon-Coles**, sistema ELO propio y simulación Monte Carlo del torneo completo — con resultados reales integrados en vivo durante la copa.
 
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
 ![Model](https://img.shields.io/badge/model-Dixon--Coles-EB5E28)
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-45%20passed-2ea44f)
@@ -49,7 +49,7 @@ results.csv (49.378 partidos, 1872–2026)
 ## Correr en local
 
 ```bash
-# 1. Pipeline de datos + modelos (Python 3.11)
+# 1. Pipeline de datos + modelos (Python 3.14)
 python -m venv .venv && .venv/Scripts/activate
 pip install -r requirements.txt
 python scripts/run_pipeline.py          # raw → ELO → features → modelos → métricas
@@ -65,17 +65,18 @@ npm run dev                             # http://localhost:3000
 pytest          # 45 tests
 ```
 
-> El dataset histórico se descarga de Kaggle ([martj42/international-football-results](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017)) vía `kagglehub` — los CSV no se versionan.
+> El dataset histórico se descarga de Kaggle ([martj42/international-football-results](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017)) y se coloca en `data/raw/` — los CSV no se versionan.
 
 ## Estructura
 
 ```
-├── src/                # Python: extractor, ELO/features, modelo, simulador, app Streamlit (demo local)
+├── src/                # Python: extractor, ELO/features, modelo Dixon-Coles, simulador
 ├── scripts/            # run_pipeline.py · export_frontend_data.py
 ├── frontend/           # Next.js 15 + React 19 + Tailwind + Recharts (target de deploy)
 │   └── src/lib/        # simulator.ts (Monte Carlo client-side) · live.ts (resultados reales)
 ├── tests/              # pytest — 45 tests
 ├── notebooks/          # EDA y análisis de features
+├── legacy/             # app Streamlit original (demo local, requiere: pip install streamlit plotly)
 └── data/               # raw (gitignored) · processed (regenerable) · external (fixture 2026)
 ```
 
