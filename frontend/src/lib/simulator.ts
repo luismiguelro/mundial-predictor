@@ -29,15 +29,95 @@ export function getProbs(predictions: PredictionsMap, t1: string, t2: string): P
   );
 }
 
+/* ── Ajuste por FORMA DEL TORNEO (solo eliminatorias) ──
+   El modelo se entrena antes del Mundial; un equipo que llega mejor o peor de
+   lo previsto (Paraguay 2026) no mueve sus fuerzas. Este ajuste repondera los
+   goles esperados según el saldo V−D en ESTE torneo: ±3 % de λ por punto de
+   saldo, acotado a ±12 %. Solo se aplica a cruces FUTUROS: los ya jugados se
+   validan siempre con la predicción original (sin mirar el resultado). */
+export type FormFactors = Record<string, number>;
+
+const FORM_STEP = 0.03;
+const FORM_MIN = 0.88;
+const FORM_MAX = 1.12;
+
+export function buildFormFactors(liveMatches: LiveMatch[]): FormFactors {
+  const net: Record<string, number> = {};
+  for (const m of liveMatches) {
+    if (m.score1 === null || m.score2 === null) continue;
+    if (!m.team1 || !m.team2) continue;
+    // ganador real (incluye penales en knockout vía m.winner)
+    const w = m.winner ?? (m.score1 > m.score2 ? m.team1 : m.score2 > m.score1 ? m.team2 : null);
+    if (!w) continue;
+    const l = w === m.team1 ? m.team2 : m.team1;
+    net[w] = (net[w] ?? 0) + 1;
+    net[l] = (net[l] ?? 0) - 1;
+  }
+  const out: FormFactors = {};
+  for (const [t, n] of Object.entries(net)) {
+    out[t] = Math.min(FORM_MAX, Math.max(FORM_MIN, 1 + FORM_STEP * n));
+  }
+  return out;
+}
+
+/** P(gol=0..10) para un λ dado. */
+function poissonRow(lam: number, max = 10): number[] {
+  const row = new Array<number>(max + 1);
+  let p = Math.exp(-lam);
+  row[0] = p;
+  for (let k = 1; k <= max; k++) { p *= lam / k; row[k] = p; }
+  return row;
+}
+
+/** Reparto 1X2 de una matriz Poisson independiente con esos λ. */
+function outcomeSplit(l1: number, l2: number): Probs {
+  const r1 = poissonRow(l1), r2 = poissonRow(l2);
+  let home = 0, draw = 0, away = 0;
+  for (let i = 0; i < r1.length; i++) {
+    for (let j = 0; j < r2.length; j++) {
+      const p = r1[i] * r2[j];
+      if (i > j) home += p;
+      else if (i === j) draw += p;
+      else away += p;
+    }
+  }
+  const s = home + draw + away;
+  return { home_win: home / s, draw: draw / s, away_win: away / s };
+}
+
+/**
+ * Probabilidades 1X2 con ajuste por forma. Aplica a las probabilidades del
+ * modelo (que traen la corrección ρ) solo el DESPLAZAMIENTO que produce la
+ * forma sobre los λ — ratio entre la matriz con y sin ajuste — y renormaliza.
+ * Sin factores (o factores 1.0) devuelve exactamente getProbs.
+ */
+export function getProbsWithForm(
+  predictions: PredictionsMap, t1: string, t2: string, form?: FormFactors
+): Probs {
+  const base = getProbs(predictions, t1, t2);
+  const f1 = form?.[t1] ?? 1;
+  const f2 = form?.[t2] ?? 1;
+  if (f1 === 1 && f2 === 1) return base;
+  const { l1, l2 } = getLambdas(predictions, t1, t2);
+  const neutral = outcomeSplit(l1, l2);
+  const boosted = outcomeSplit(l1 * f1, l2 * f2);
+  const home = base.home_win * (boosted.home_win / neutral.home_win);
+  const draw = base.draw * (boosted.draw / neutral.draw);
+  const away = base.away_win * (boosted.away_win / neutral.away_win);
+  const s = home + draw + away;
+  return { home_win: home / s, draw: draw / s, away_win: away / s };
+}
+
 /**
  * Probabilidad de que cada equipo GANE el cruce de eliminatoria (incluye el
  * desempate por penales, repartido según el historial igual que sampleKnockout).
  * Devuelve {pa, pb} con pa+pb = 1, orientado al orden (a, b).
+ * Con `form`, las probabilidades base llevan el ajuste por forma del torneo.
  */
 export function crossWinProb(
-  predictions: PredictionsMap, a: string, b: string, pens?: PenRates
+  predictions: PredictionsMap, a: string, b: string, pens?: PenRates, form?: FormFactors
 ): { pa: number; pb: number } {
-  const p = getProbs(predictions, a, b);
+  const p = getProbsWithForm(predictions, a, b, form);
   const r1 = pens?.[a] ?? 0.5;
   const r2 = pens?.[b] ?? 0.5;
   const pa = p.home_win + p.draw * (r1 / (r1 + r2));
@@ -213,7 +293,8 @@ function playKnockout(
   top8: { team: string; group: string }[],
   predictions: PredictionsMap,
   pens: PenRates,
-  counts: Record<string, Record<string, number>>
+  counts: Record<string, Record<string, number>>,
+  form?: FormFactors
 ): void {
   // Asignación de terceros a sus slots
   const thirdSlots: { num: number; side: "a" | "b"; groups: string[] }[] = [];
@@ -232,7 +313,7 @@ function playKnockout(
     if (!a || !b) continue;
     if (counts[a]) counts[a].r32++;
     if (counts[b]) counts[b].r32++;
-    const w = sampleKnockout(getProbs(predictions, a, b), a, b, pens);
+    const w = sampleKnockout(getProbsWithForm(predictions, a, b, form), a, b, pens);
     winByNum[c.num] = w;
     if (counts[w]) counts[w][stageWonBy(c.num)]++;
   }
@@ -242,7 +323,7 @@ function playKnockout(
     const a = winByNum[parseInt(c.a.slice(1), 10)];
     const b = winByNum[parseInt(c.b.slice(1), 10)];
     if (!a || !b) continue;
-    const w = sampleKnockout(getProbs(predictions, a, b), a, b, pens);
+    const w = sampleKnockout(getProbsWithForm(predictions, a, b, form), a, b, pens);
     winByNum[c.num] = w;
     if (counts[w]) counts[w][stageWonBy(c.num)]++;
   }
@@ -313,6 +394,8 @@ export function runMonteCarlo(
   const elos = Object.fromEntries(allTeams.map((t) => [t, teams[t]?.elo ?? 1500]));
   const hostBoost = Object.fromEntries(allTeams.map((t) => [t, teams[t]?.host_boost ?? 1]));
   const penRates = buildPenRates(teams);
+  // Forma del torneo (saldo V−D real): repondera solo los cruces de eliminatoria
+  const form = liveMatches ? buildFormFactors(liveMatches) : undefined;
 
   for (let sim = 0; sim < n; sim++) {
     const groupStandings: Record<string, string[]> = {};
@@ -334,7 +417,7 @@ export function runMonteCarlo(
 
     if (bracket) {
       // Cuadro eliminatorio oficial 2026
-      playKnockout(bracket, groupStandings, top8, predictions, penRates, counts);
+      playKnockout(bracket, groupStandings, top8, predictions, penRates, counts, form);
     } else {
       // Fallback: sorteo aleatorio (sin estructura oficial)
       const flat = [
@@ -351,7 +434,7 @@ export function runMonteCarlo(
       for (const stage of roundKeys) {
         const next: string[] = [];
         for (let i = 0; i < current.length; i += 2) {
-          next.push(sampleKnockout(getProbs(predictions, current[i], current[i + 1]), current[i], current[i + 1], penRates));
+          next.push(sampleKnockout(getProbsWithForm(predictions, current[i], current[i + 1], form), current[i], current[i + 1], penRates));
         }
         for (const t of next) counts[t][stage]++;
         current = next;
@@ -456,6 +539,7 @@ export function simulateTeamPath(
   const elos = Object.fromEntries(allTeams.map((t) => [t, teams[t]?.elo ?? 1500]));
   const hostBoost = Object.fromEntries(allTeams.map((t) => [t, teams[t]?.host_boost ?? 1]));
   const penRates = buildPenRates(teams);
+  const form = liveMatches ? buildFormFactors(liveMatches) : undefined;
 
   const ROUNDS: TeamPathRound["round"][] = ["r32", "r16", "qf", "sf", "final"];
   const reach: Record<string, number> = {};
@@ -495,7 +579,7 @@ export function simulateTeamPath(
       const a = resolveSlot(c.a, c.num, "a", groupStandings, thirdAssign);
       const b = resolveSlot(c.b, c.num, "b", groupStandings, thirdAssign);
       if (!a || !b) continue;
-      const w = sampleKnockout(getProbs(predictions, a, b), a, b, penRates);
+      const w = sampleKnockout(getProbsWithForm(predictions, a, b, form), a, b, penRates);
       winByNum[c.num] = w;
       if (a === team || b === team) record("r32", a === team ? b : a, w === team);
     }
@@ -504,7 +588,7 @@ export function simulateTeamPath(
       const a = winByNum[parseInt(c.a.slice(1), 10)];
       const b = winByNum[parseInt(c.b.slice(1), 10)];
       if (!a || !b) continue;
-      const w = sampleKnockout(getProbs(predictions, a, b), a, b, penRates);
+      const w = sampleKnockout(getProbsWithForm(predictions, a, b, form), a, b, penRates);
       winByNum[c.num] = w;
       if (a === team || b === team) record(roundOfNum(c.num), a === team ? b : a, w === team);
     }
@@ -705,8 +789,10 @@ export function buildLiveBracket(
   liveMatches: LiveMatch[],
   states: Map<string, MatchState>,
   /** modo PREDICCIÓN: si un cruce no se ha jugado, avanza el favorito del modelo
-      (mayor prob. de pasar) y se propaga hasta el campeón pronosticado. */
-  predict?: { predictions: PredictionsMap; pens: PenRates }
+      (mayor prob. de pasar) y se propaga hasta el campeón pronosticado.
+      `form`: ajuste por forma del torneo, aplicado SOLO a cruces sin jugar
+      (los jugados se validan con la predicción original, sin mirar el resultado). */
+  predict?: { predictions: PredictionsMap; pens: PenRates; form?: FormFactors }
 ): LiveBracketData {
   // Orden real de cada grupo (1.º..4.º) para resolver los slots 1A / 2B…
   const order: Record<string, string[]> = {};
@@ -735,7 +821,9 @@ export function buildLiveBracket(
     if (predict && a && b) {
       // Predicción INDEPENDIENTE: siempre avanza el favorito del modelo (no se
       // mira el resultado), y si ese cruce ya se jugó se valida contra la realidad.
-      const { pa, pb } = crossWinProb(predict.predictions, a, b, predict.pens);
+      // La forma solo entra en cruces FUTUROS: la validación queda congelada.
+      const useForm = st?.winner ? undefined : predict.form;
+      const { pa, pb } = crossWinProb(predict.predictions, a, b, predict.pens, useForm);
       const fav = pa >= pb ? a : b;
       winByNum[num] = fav;
       predictedByNum[num] = true;
@@ -831,7 +919,8 @@ export function buildLiveBracket(
     const st = l1 && l2 ? states.get(pairKey(l1, l2)) ?? null : null;
     let tw = st?.winner ?? null, tp = false, twp: number | undefined, th: boolean | null | undefined;
     if (predict && l1 && l2) {
-      const { pa, pb } = crossWinProb(predict.predictions, l1, l2, predict.pens);
+      const { pa, pb } = crossWinProb(predict.predictions, l1, l2, predict.pens,
+        st?.winner ? undefined : predict.form);
       tw = pa >= pb ? l1 : l2; tp = true; twp = Math.max(pa, pb);
       th = st?.winner ? st.winner === tw : null;
     }

@@ -19,6 +19,33 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-07-01-forma-torneo",
+    date: "2026-07-01",
+    tag: "improve",
+    title: {
+      es: "El modelo ahora escucha al torneo",
+      en: "The model now listens to the tournament",
+      pt: "O modelo agora escuta o torneio",
+    },
+    items: {
+      es: [
+        "Ajuste por forma: las predicciones de eliminatorias reponderan los goles esperados según el saldo real de victorias y derrotas de cada selección en este Mundial (±3 % por punto, tope ±12 %). Los cruces ya jugados conservan la predicción original — la validación ✓/✗ no se toca.",
+        "Juego limpio, explicado: nota en «En Vivo» — los pronósticos se publicaron antes del Mundial; con cada partido solo se actualiza el análisis (aciertos, tablas y proyecciones).",
+        "Al compartir la web, el preview ahora muestra el récord del modelo en vivo.",
+      ],
+      en: [
+        "Form adjustment: knockout predictions reweight expected goals by each team's real win/loss balance at this World Cup (±3% per point, capped at ±12%). Already-played ties keep the original prediction — the ✓/✗ validation is untouched.",
+        "Fair play, explained: a note in “Live” — forecasts were published before the World Cup; each match only updates the analysis (hits, tables and projections).",
+        "When sharing the site, the preview now shows the model's live record.",
+      ],
+      pt: [
+        "Ajuste pela forma: as predições do mata-mata reponderam os gols esperados pelo saldo real de vitórias e derrotas de cada seleção nesta Copa (±3% por ponto, teto de ±12%). Confrontos já jogados mantêm a predição original — a validação ✓/✗ não muda.",
+        "Jogo limpo, explicado: nota em «Ao Vivo» — os prognósticos foram publicados antes da Copa; cada partida só atualiza a análise (acertos, tabelas e projeções).",
+        "Ao compartilhar o site, o preview agora mostra o desempenho do modelo ao vivo.",
+      ],
+    },
+  },
+  {
     id: "2026-06-30-prediccion-eliminatorias",
     date: "2026-06-30",
     tag: "new",

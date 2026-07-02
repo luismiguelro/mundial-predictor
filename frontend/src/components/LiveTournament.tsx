@@ -171,6 +171,15 @@ export default function LiveTournament({
         />
       </motion.div>
 
+      {/* Juego limpio: las predicciones se publican antes y no se modifican */}
+      <motion.p
+        variants={fadeUp}
+        className="text-[11px] leading-snug text-center -mt-3"
+        style={{ color: "var(--text-muted)" }}
+      >
+        🔒 {T.lt_frozen}
+      </motion.p>
+
       {/* ── En juego ahora ── */}
       {inPlay.length > 0 && (
         <motion.section variants={fadeUp} className="space-y-3">

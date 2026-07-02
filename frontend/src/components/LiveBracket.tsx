@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import type { TeamInfo, LiveMatch, Prediction } from "@/types";
 import { buildMatchStates, type StandingRow } from "@/lib/live";
 import {
-  buildLiveBracket, buildPenRates, crossWinProb,
+  buildFormFactors, buildLiveBracket, buildPenRates, crossWinProb,
   type Bracket, type BracketCrossLive,
-  type BracketSlotLive, type KoRoundKey,
+  type BracketSlotLive, type FormFactors, type KoRoundKey,
 } from "@/lib/simulator";
 import { useLang } from "@/lib/i18n";
 import CrossDetail from "@/components/CrossDetail";
@@ -67,9 +67,11 @@ export default function LiveBracket({ bracket, standings, liveMatches, teams, pr
 
   const states = useMemo(() => buildMatchStates(liveMatches), [liveMatches]);
   const penRates = useMemo(() => buildPenRates(teams), [teams]);
+  // Forma del torneo (saldo V−D real): ajusta solo las predicciones de cruces sin jugar
+  const formFactors = useMemo(() => buildFormFactors(liveMatches), [liveMatches]);
   const data = useMemo(
-    () => buildLiveBracket(bracket, standings, liveMatches, states, predict ? { predictions, pens: penRates } : undefined),
-    [bracket, standings, liveMatches, states, predict, predictions, penRates]
+    () => buildLiveBracket(bracket, standings, liveMatches, states, predict ? { predictions, pens: penRates, form: formFactors } : undefined),
+    [bracket, standings, liveMatches, states, predict, predictions, penRates, formFactors]
   );
 
   // Aciertos del cuadro predictivo: cruces ya jugados donde el favorito avanzó.
@@ -166,6 +168,7 @@ export default function LiveBracket({ bracket, standings, liveMatches, teams, pr
                     >
                       <div style={{ width: COL_W }}>
                         <CrossCard c={c} flag={flag} T={T} predictions={predictions} pens={penRates}
+                                   form={formFactors}
                                    onOpen={c.a.team && c.b.team ? () => setSel(c) : undefined} />
                       </div>
                       {!isLast && <Connectors index={i} winner={!!c.winner} />}
@@ -188,6 +191,7 @@ export default function LiveBracket({ bracket, standings, liveMatches, teams, pr
           <div style={{ width: COL_W }}>
             <CrossCard
               c={data.thirdPlace} flag={flag} T={T} predictions={predictions} pens={penRates}
+              form={formFactors}
               onOpen={data.thirdPlace.a.team && data.thirdPlace.b.team ? () => setSel(data.thirdPlace) : undefined}
             />
           </div>
@@ -199,6 +203,7 @@ export default function LiveBracket({ bracket, standings, liveMatches, teams, pr
           a={sel.a.team} b={sel.b.team} num={sel.num}
           roundLabel={roundLabel(sel.round, T)}
           teams={teams} predictions={predictions} pens={penRates}
+          form={formFactors}
           real={sel.played ? sel.state : null} realWinner={sel.winner}
           onClose={() => setSel(null)}
         />
@@ -226,18 +231,20 @@ function Connectors({ index, winner }: { index: number; winner: boolean }) {
   );
 }
 
-function CrossCard({ c, flag, T, predictions, pens, onOpen }: {
+function CrossCard({ c, flag, T, predictions, pens, form, onOpen }: {
   c: BracketCrossLive;
   flag: (name: string | null) => string;
   T: T;
   predictions: Record<string, Prediction>;
   pens: PenRates;
+  /** ajuste por forma del torneo (solo aplica a cruces sin jugar) */
+  form?: FormFactors;
   /** abre el detalle del cruce; undefined si aún no hay ambos rivales */
   onOpen?: () => void;
 }) {
   /* % del modelo por slot: solo cuando el cruce no se ha jugado y ya hay rivales. */
   const probs = !c.played && c.a.team && c.b.team
-    ? crossWinProb(predictions, c.a.team, c.b.team, pens)
+    ? crossWinProb(predictions, c.a.team, c.b.team, pens, form)
     : null;
 
   return (

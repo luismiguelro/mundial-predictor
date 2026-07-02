@@ -89,22 +89,31 @@ Warnings de lint pendientes (no bloquean): fuente custom en `layout.tsx`
 
 ## Mejoras recomendadas (priorizadas)
 
-1. **Ajuste por forma del torneo para el KO** — reponderar los λ del modelo con
-   el saldo V/D del torneo en curso (~30 líneas en TS; el caso
-   Paraguay-Alemania lo habría capturado parcialmente). Única mejora de
-   accuracy accionable en lo que queda de Mundial.
-2. **Tests frontend con vitest** — `matchThirds` (backtracking),
+1. ✅ **Ajuste por forma del torneo para el KO** — *implementado 2026-07-01*:
+   `buildFormFactors`/`getProbsWithForm` en `simulator.ts` reponderan los λ
+   por el saldo V−D real (±3 %/punto, tope ±12 %), solo en cruces futuros;
+   la validación ✓/✗ conserva la predicción original.
+2. ✅ **Tarjeta social (OG image) con el récord en vivo** — *implementado
+   2026-07-01*: `app/opengraph-image.tsx` calcula los veredictos en el
+   servidor (misma lógica que la web) y renderiza el stat con la marca del
+   sitio; fallback al backtest si no hay token.
+3. ✅ **Credibilidad, en lenguaje llano** — *implementado 2026-07-01*: nota de
+   «juego limpio» en «En Vivo» (cada pronóstico se publica antes del partido y
+   no se modifica después). Se descartó enlazar a GitHub: demasiado técnico
+   para la audiencia de la web; el historial de commits queda como respaldo
+   citable en el post/portafolio.
+4. **Tests frontend con vitest** — `matchThirds` (backtracking),
    `computeGroupStandings` (head-to-head FIFA), `evaluatePrediction`,
-   `applyKnockoutReality`. Funciones puras, 1-2 h.
-3. **Web Worker para `runMonteCarlo`** — hoy corre en el hilo principal
+   `applyKnockoutReality` y ahora `getProbsWithForm`. Funciones puras, 1-2 h.
+5. **Web Worker para `runMonteCarlo`** — hoy corre en el hilo principal
    (Knockout.tsx, Simulator.tsx); con n=1000-2000 congela ~1-2 s en móviles.
-4. **Backtest 2026 completo post-torneo** (104 partidos) como segunda
+6. **Backtest 2026 completo post-torneo** (104 partidos) como segunda
    validación honesta para README y post final.
-5. **Resolver los 4 warnings de lint** y considerar `--max-warnings 0` en CI.
-6. **Decidir el destino de `src/simulator.py`** (ver hallazgo 5).
-7. **Documentar en el Glosario** la decisión ELO-solo-display (ya tomada).
-8. **Snapshot diario de la API** (los JSON de football-data) para poder
-   reconstruir métricas históricas sin depender del upstream.
+7. **Resolver los 4 warnings de lint** y considerar `--max-warnings 0` en CI.
+8. **Decidir el destino de `src/simulator.py`** (ver hallazgo 5).
+9. **Documentar en el Glosario** la decisión ELO-solo-display (ya tomada).
+10. **Snapshot diario de la API** (los JSON de football-data) para poder
+    reconstruir métricas históricas sin depender del upstream.
 
 ## Checklist de portafolio
 

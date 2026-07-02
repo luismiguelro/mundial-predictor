@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import type { TeamInfo, Prediction } from "@/types";
 import type { MatchState } from "@/lib/live";
-import { crossWinProb, getProbs, getLambdas } from "@/lib/simulator";
+import { crossWinProb, getProbsWithForm, getLambdas, type FormFactors } from "@/lib/simulator";
 import { useLang } from "@/lib/i18n";
 
 interface Props {
@@ -15,6 +15,8 @@ interface Props {
   teams: Record<string, TeamInfo>;
   predictions: Record<string, Prediction>;
   pens: Record<string, number>;
+  /** ajuste por forma del torneo — solo se aplica si el cruce NO se ha jugado */
+  form?: FormFactors;
   /** resultado real si el cruce ya se jugó */
   real?: MatchState | null;
   realWinner?: string | null;
@@ -28,7 +30,7 @@ function poissonPmf(k: number, lam: number): number {
 }
 
 export default function CrossDetail({
-  a, b, num, roundLabel, teams, predictions, pens, real, realWinner, onClose,
+  a, b, num, roundLabel, teams, predictions, pens, form, real, realWinner, onClose,
 }: Props) {
   const T = useLang();
 
@@ -39,26 +41,36 @@ export default function CrossDetail({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const { pa, pb } = crossWinProb(predictions, a, b, pens);
-  const p = getProbs(predictions, a, b); // home_win = a gana en 90', draw, away_win = b gana
+  /* forma del torneo: SOLO en cruces sin jugar (los jugados muestran la
+     predicción original con la que se validó el acierto) */
+  const activeForm = real ? undefined : form;
+  const f1 = activeForm?.[a] ?? 1;
+  const f2 = activeForm?.[b] ?? 1;
+  const formApplied = f1 !== 1 || f2 !== 1;
 
-  /* distribución de marcadores (Poisson independiente sobre los λ del modelo) */
+  const { pa, pb } = crossWinProb(predictions, a, b, pens, activeForm);
+  const p = getProbsWithForm(predictions, a, b, activeForm); // home_win = a gana en 90', draw, away_win = b
+
+  /* distribución de marcadores (Poisson independiente sobre los λ del modelo,
+     con los λ reponderados por forma si el cruce no se ha jugado) */
   const { mostLikely, top } = useMemo(() => {
     const { l1, l2 } = getLambdas(predictions, a, b);
+    const la = l1 * f1, lb = l2 * f2;
     const grid: { s1: number; s2: number; p: number }[] = [];
     for (let i = 0; i <= 6; i++) {
-      for (let j = 0; j <= 6; j++) grid.push({ s1: i, s2: j, p: poissonPmf(i, l1) * poissonPmf(j, l2) });
+      for (let j = 0; j <= 6; j++) grid.push({ s1: i, s2: j, p: poissonPmf(i, la) * poissonPmf(j, lb) });
     }
     grid.sort((x, y) => y.p - x.p);
     const pd = predictions[`${a}|${b}`];
     const rv = predictions[`${b}|${a}`];
-    const ml = pd?.score_home != null && pd?.score_away != null
+    // con forma activa el marcador más probable sale de la grilla ajustada
+    const ml = !formApplied && pd?.score_home != null && pd?.score_away != null
       ? { s1: pd.score_home, s2: pd.score_away }
-      : rv?.score_home != null && rv?.score_away != null
+      : !formApplied && rv?.score_home != null && rv?.score_away != null
         ? { s1: rv.score_away, s2: rv.score_home }
         : { s1: grid[0].s1, s2: grid[0].s2 };
     return { mostLikely: ml, top: grid.slice(0, 5) };
-  }, [predictions, a, b]);
+  }, [predictions, a, b, f1, f2, formApplied]);
 
   const flag = (n: string) => teams[n]?.flag ?? "🏳️";
   const favA = pa >= pb;
@@ -188,6 +200,11 @@ export default function CrossDetail({
             </div>
           )}
 
+          {formApplied && (
+            <p className="text-[10px] leading-snug text-center" style={{ color: "var(--wc-gold)" }}>
+              ⚡ {T.lt_cdForm}
+            </p>
+          )}
           <p className="text-[10px] leading-snug text-center" style={{ color: "var(--text-muted)" }}>
             {T.lt_cdNote}
           </p>

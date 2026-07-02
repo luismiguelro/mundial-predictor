@@ -3,6 +3,11 @@ import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  // Base para URLs absolutas de metadatos (imagen OG): dominio de producción
+  // en Vercel; en local no hace falta.
+  metadataBase: process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? new URL(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
+    : undefined,
   title: "Mundial 2026 Predictor · ML + ELO",
   description:
     "Predictor de resultados del Mundial FIFA 2026 usando el modelo Dixon-Coles de goles, ratings ELO y simulación Monte Carlo.",
