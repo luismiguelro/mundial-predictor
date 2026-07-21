@@ -6,7 +6,7 @@ import type {
   TeamInfo, Prediction, HistoricalMatch, SiteStats, FixedResults,
   Goalscorer, GroupMatch, GroupStandingEntry, LiveMatch, QatarBacktest,
 } from "@/types";
-import { LangContext, type Lang } from "@/lib/i18n";
+import { LangContext, useLang, type Lang } from "@/lib/i18n";
 import {
   buildFixedResults, buildGroupProbIndex, buildLiveStats, buildScoreMap, buildVerdicts,
   fetchLiveMatches, fetchStandings, type LiveStats, type ScoreMap, type StandingRow,
@@ -22,6 +22,9 @@ import ChampionTrend  from "@/components/ChampionTrend";
 import Glossary       from "@/components/Glossary";
 import LiveTournament from "@/components/LiveTournament";
 import Changelog      from "@/components/Changelog";
+import ChampionCelebration from "@/components/ChampionCelebration";
+import { findFinal, summarizeFinal, tournamentDateRange, WC2030_START_UTC, type FinalSummary } from "@/lib/championData";
+import { useCountdown, pad2 } from "@/lib/countdown";
 
 /* ─────────────────────────────────────────────────────────────
    UI DEL SHELL (hero, navbar, tabs, footer)
@@ -57,6 +60,9 @@ const SHELL = {
     lastLabel:  "Último",
     pens:       "pen.",
     daysSuffix: "d",
+    tournamentOver: "Mundial finalizado",
+    championChip:   "Campeón",
+    nextWcChip:     "Mundial 2030 en",
   },
   en: {
     navLabel:   "ML Predictor",
@@ -88,6 +94,9 @@ const SHELL = {
     lastLabel:  "Latest",
     pens:       "pens",
     daysSuffix: "d",
+    tournamentOver: "World Cup finished",
+    championChip:   "Champion",
+    nextWcChip:     "2030 World Cup in",
   },
   pt: {
     navLabel:   "Preditor ML",
@@ -119,6 +128,9 @@ const SHELL = {
     lastLabel:  "Último",
     pens:       "pên.",
     daysSuffix: "d",
+    tournamentOver: "Copa finalizada",
+    championChip:   "Campeão",
+    nextWcChip:     "Copa 2030 em",
   },
 } as const;
 
@@ -202,6 +214,12 @@ export default function Home() {
     () => ({ played: verdicts.length, hits: verdicts.filter((v) => v.hit).length }),
     [verdicts]
   );
+  /* Mundial terminado: se lee del partido de la FINAL en los datos reales
+     (nunca se asume un equipo). Alimenta el chip de campeón y el efecto
+     de apertura; si el torneo sigue en curso, ambos quedan inactivos. */
+  const finalMatch   = useMemo(() => findFinal(liveMatches), [liveMatches]);
+  const championInfo = useMemo(() => (finalMatch ? summarizeFinal(finalMatch) : null), [finalMatch]);
+  const playedRange  = useMemo(() => tournamentDateRange(liveMatches), [liveMatches]);
 
   /* Persistencia */
   useEffect(() => {
@@ -242,6 +260,12 @@ export default function Home() {
     /* Context provider: toda la app recibe el idioma activo */
     <LangContext.Provider value={lang}>
       <div style={{ background: mainBg, minHeight: "100dvh", transition: "background 0.25s" }}>
+
+        {/* ══ ¡CAMPEONES! — efecto de apertura, solo si los datos reales
+             confirman un partido de FINAL ya jugado ══════════════════ */}
+        {championInfo && teams && (
+          <ChampionCelebration final={championInfo} liveMatches={liveMatches} teams={teams} lang={lang} />
+        )}
 
         {/* ══ NAVBAR ══════════════════════════════════════════ */}
         <nav className="navbar-wc">
@@ -310,7 +334,10 @@ export default function Home() {
               <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", letterSpacing: "0.2em", color: "var(--color-ink-secondary)", textTransform: "uppercase" }}>
                 {S.eyebrow}
               </span>
-              <TournamentStatus S={S} stats={liveStats} record={record} teams={teams} />
+              <TournamentStatus
+                S={S} stats={liveStats} record={record} teams={teams}
+                championInfo={championInfo} playedRange={playedRange}
+              />
             </motion.div>
 
             {/* H1 */}
@@ -439,11 +466,15 @@ const KICKOFF_UTC = Date.parse("2026-06-11T19:00:00Z"); // México vs Sudáfrica
 
 type ShellStrings = (typeof SHELL)[Lang];
 
-function TournamentStatus({ S, stats, record, teams }: {
+function TournamentStatus({ S, stats, record, teams, championInfo, playedRange }: {
   S: ShellStrings;
   stats: LiveStats;
   record: { played: number; hits: number };
   teams: Record<string, TeamInfo> | null;
+  /** null hasta que la FINAL real se juega — nunca se asume un campeón */
+  championInfo: FinalSummary | null;
+  /** primera/última fecha con partidos realmente jugados (no hardcodeado) */
+  playedRange: { first: string; last: string } | null;
 }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -451,6 +482,8 @@ function TournamentStatus({ S, stats, record, teams }: {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+  const T = useLang();
+  const nextWc = useCountdown(WC2030_START_UTC);
 
   if (now === null) return null; // evita mismatch SSR/cliente
 
@@ -461,26 +494,46 @@ function TournamentStatus({ S, stats, record, teams }: {
     const h = Math.floor((diff % 86_400_000) / 3_600_000);
     const m = Math.floor((diff % 3_600_000) / 60_000);
     const s = Math.floor((diff % 60_000) / 1_000);
-    const pad = (x: number) => String(x).padStart(2, "0");
     return (
       <span className="status-chip">
         {S.kickoffIn}
-        <strong>{d}{S.daysSuffix} {pad(h)}:{pad(m)}:{pad(s)}</strong>
+        <strong>{d}{S.daysSuffix} {pad2(h)}:{pad2(m)}:{pad2(s)}</strong>
       </span>
     );
   }
 
-  /* Torneo en curso: chips con data real (openfootball, se actualiza al cerrar cada partido) */
+  /* Torneo en curso/terminado: chips con data real (openfootball/football-data,
+     se actualiza al cerrar cada partido). El campeón solo aparece cuando el
+     partido de la FINAL ya tiene marcador oficial. */
   const flag = (name: string) => teams?.[name]?.flag ?? "";
   const { last } = stats;
   const pct = record.played ? Math.round((record.hits / record.played) * 100) : 0;
 
+  const fmtDay = (d: string) =>
+    new Date(d + "T12:00:00Z").toLocaleDateString(T.locale, { day: "numeric", month: "short" });
+  const rangeLabel = playedRange
+    ? playedRange.first === playedRange.last
+      ? fmtDay(playedRange.first)
+      : `${fmtDay(playedRange.first)} – ${fmtDay(playedRange.last)}`
+    : "";
+
   return (
     <>
-      <span className="status-chip status-chip--live">
-        <span className="live-dot" />
-        {S.liveNow}
-      </span>
+      {championInfo ? (
+        <span className="status-chip status-chip--gold badge-gold">
+          🏆 {S.championChip}: <strong>{flag(championInfo.champion)} {championInfo.champion}</strong>
+        </span>
+      ) : (
+        <span className="status-chip status-chip--live">
+          <span className="live-dot" />
+          {S.liveNow}
+        </span>
+      )}
+      {championInfo && rangeLabel && (
+        <span className="status-chip">
+          {S.tournamentOver} · {rangeLabel}
+        </span>
+      )}
       {stats.played > 0 && (
         <span className="status-chip">
           <strong>{stats.played}</strong> {S.played} · <strong>{stats.goals}</strong> {S.goalsLabel} · <strong>{stats.avg.toFixed(1)}</strong>{S.perMatch}
@@ -491,7 +544,7 @@ function TournamentStatus({ S, stats, record, teams }: {
           {S.modelTag} <strong>{record.hits}/{record.played}</strong> {S.hitsLabel} ({pct}%)
         </span>
       )}
-      {last && last.score1 !== null && last.score2 !== null && (
+      {!championInfo && last && last.score1 !== null && last.score2 !== null && (
         <span className="status-chip">
           {S.lastLabel}: <strong>{flag(last.team1)} {last.team1} {last.score1}–{last.score2} {last.team2} {flag(last.team2)}</strong>
           {last.penalties && (
@@ -499,6 +552,11 @@ function TournamentStatus({ S, stats, record, teams }: {
               ({S.pens} {last.penalties.home}–{last.penalties.away})
             </span>
           )}
+        </span>
+      )}
+      {championInfo && nextWc && (
+        <span className="status-chip">
+          {S.nextWcChip} <strong>{nextWc.days}{S.daysSuffix} {pad2(nextWc.hours)}:{pad2(nextWc.minutes)}:{pad2(nextWc.seconds)}</strong>
         </span>
       )}
     </>

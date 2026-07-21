@@ -10,6 +10,7 @@ import {
 import { useLang } from "@/lib/i18n";
 import { fetchLiveScorers, mergeScorers, type LiveScorer, type CombinedScorer } from "@/lib/scorers";
 import { augmentStats } from "@/lib/stats";
+import ChampionSpotlight from "@/components/ChampionSpotlight";
 
 interface Props {
   stats: SiteStats;
@@ -68,6 +69,9 @@ export default function FunFacts({ stats: rawStats, goalscorers, qatar, teams, l
           <span className="text-[var(--text-muted)]">· +{stats2026} {T.statsLiveMatches}</span>
         </div>
       )}
+
+      {/* ── Mundial 2026: campeón, premios, camino al título y cuenta regresiva al próximo Mundial ── */}
+      <ChampionSpotlight liveMatches={liveMatches ?? []} teams={teams} />
 
       {/* ── KPIs ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

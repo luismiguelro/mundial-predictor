@@ -19,6 +19,36 @@ export interface ChangeEntry {
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: "2026-07-21-espana-campeona",
+    date: "2026-07-21",
+    tag: "new",
+    title: {
+      es: "🏆 España, campeona del Mundial 2026",
+      en: "🏆 Spain, 2026 World Cup champions",
+      pt: "🏆 Espanha, campeã da Copa 2026",
+    },
+    items: {
+      es: [
+        "Efecto de apertura: al entrar al sitio se ve un modal de celebración con España como campeona (1–0 a Argentina, prórroga), animaciones y confeti — se lee del partido de la FINAL en los datos reales, nunca se asume el equipo.",
+        "Debajo del modal y en la pestaña Stats: premios individuales (Balón, Bota y Guante de Oro), el camino completo de España al título (grupos + eliminatoria, con marcadores reales) y datos curiosos de la campaña.",
+        "El chip «Torneo en vivo» del encabezado pasa a «Mundial finalizado» con las fechas realmente jugadas en cuanto la FINAL tiene marcador oficial.",
+        "Nuevo contador regresivo al Mundial 2030 (España · Portugal · Marruecos, con los partidos del centenario en Uruguay, Argentina y Paraguay).",
+      ],
+      en: [
+        "Opening effect: landing on the site now shows a celebration modal with Spain as champions (1–0 over Argentina, extra time), animations and confetti — read straight from the FINAL match in the real data, never assumed.",
+        "Below the modal and in the Stats tab: individual awards (Golden Ball, Boot and Glove), Spain's full road to the title (groups + knockouts, with real scores) and fun facts from the run.",
+        "The header's “Tournament live” chip switches to “World Cup finished” with the actual dates played as soon as the FINAL has an official score.",
+        "New countdown to the 2030 World Cup (Spain · Portugal · Morocco, with centenary matches in Uruguay, Argentina and Paraguay).",
+      ],
+      pt: [
+        "Efeito de abertura: ao entrar no site aparece um modal de celebração com a Espanha como campeã (1–0 sobre a Argentina, na prorrogação), animações e confete — lido direto da partida da FINAL nos dados reais, nunca presumido.",
+        "Abaixo do modal e na aba Stats: prêmios individuais (Bola, Chuteira e Luva de Ouro), o caminho completo da Espanha até o título (grupos + mata-mata, com placares reais) e curiosidades da campanha.",
+        "O chip “Torneio ao vivo” do cabeçalho passa a “Copa finalizada” com as datas realmente disputadas assim que a FINAL tiver placar oficial.",
+        "Nova contagem regressiva para a Copa 2030 (Espanha · Portugal · Marrocos, com os jogos do centenário no Uruguai, Argentina e Paraguai).",
+      ],
+    },
+  },
+  {
     id: "2026-07-01-forma-torneo",
     date: "2026-07-01",
     tag: "improve",

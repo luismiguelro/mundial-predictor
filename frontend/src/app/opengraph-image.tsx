@@ -4,6 +4,7 @@ import { buildGroupProbIndex, buildVerdicts, normalizeName } from "@/lib/live";
 import { applyScoreOverrides } from "@/lib/overrides";
 import { buildPenRates } from "@/lib/simulator";
 import { fetchWorldCupMatches } from "@/lib/fdApi";
+import { findFinal, summarizeFinal, type FinalSummary } from "@/lib/championData";
 import predictionsJson from "../../public/data/predictions.json";
 import groupMatchesJson from "../../public/data/group_matches.json";
 import teamsJson from "../../public/data/teams.json";
@@ -33,10 +34,11 @@ interface Headline {
   hits: number;
   total: number;
   live: boolean;
+  champion: (FinalSummary & { flag: string }) | null;
 }
 
 async function computeRecord(): Promise<Headline> {
-  const fallback: Headline = { hits: 34, total: 64, live: false }; // backtest Qatar 2022
+  const fallback: Headline = { hits: 34, total: 64, live: false, champion: null }; // backtest Qatar 2022
   const token = process.env.FOOTBALL_DATA_TOKEN;
   if (!token) return fallback;
   try {
@@ -66,10 +68,16 @@ async function computeRecord(): Promise<Headline> {
       matches, predictions, buildGroupProbIndex(groupMatches), buildPenRates(teams)
     );
     if (verdicts.length === 0) return fallback;
+    // Campeón real (partido de la FINAL ya jugado) — nunca se asume un equipo.
+    const final = findFinal(matches);
+    const champion = final
+      ? { ...summarizeFinal(final), flag: teams[summarizeFinal(final).champion]?.flag ?? "🏆" }
+      : null;
     return {
       hits: verdicts.filter((v) => v.hit).length,
       total: verdicts.length,
       live: true,
+      champion,
     };
   } catch {
     return fallback;
@@ -77,7 +85,7 @@ async function computeRecord(): Promise<Headline> {
 }
 
 export default async function OgImage() {
-  const { hits, total, live } = await computeRecord();
+  const { hits, total, live, champion } = await computeRecord();
   const pct = Math.round((hits / total) * 100);
 
   return new ImageResponse(
@@ -110,41 +118,68 @@ export default async function OgImage() {
                 alignItems: "center",
                 gap: 12,
                 background: CARD,
-                border: `2px solid ${RED}`,
+                border: `2px solid ${champion ? GOLD_DIM : RED}`,
                 borderRadius: 14,
                 padding: "10px 22px",
               }}
             >
-              <div style={{ display: "flex", width: 14, height: 14, borderRadius: 999, background: RED }} />
+              {champion ? (
+                <div style={{ display: "flex", fontSize: 22 }}>🏆</div>
+              ) : (
+                <div style={{ display: "flex", width: 14, height: 14, borderRadius: 999, background: RED }} />
+              )}
               <div style={{ display: "flex", fontSize: 24, fontWeight: 700, color: INK, letterSpacing: 3 }}>
-                EN VIVO
+                {champion ? "MUNDIAL FINALIZADO" : "EN VIVO"}
               </div>
             </div>
           )}
         </div>
 
-        {/* hero: el récord del modelo */}
-        <div style={{ display: "flex", flex: 1, alignItems: "center", gap: 48 }}>
-          <div style={{ display: "flex", width: 10, height: 260, background: GOLD_DIM, borderRadius: 5 }} />
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: INK2, letterSpacing: 5 }}>
-              {live ? "ACIERTOS DEL MODELO · MUNDIAL 2026" : "BACKTEST QATAR 2022 · 64 PARTIDOS"}
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 28 }}>
-              <div style={{ display: "flex", fontSize: 190, fontWeight: 800, color: GOLD, lineHeight: 1.1 }}>
-                {pct}%
+        {/* hero: campeón real si ya se jugó la final, si no el récord del modelo */}
+        {champion ? (
+          <div style={{ display: "flex", flex: 1, alignItems: "center", gap: 48 }}>
+            <div style={{ display: "flex", width: 10, height: 260, background: GOLD_DIM, borderRadius: 5 }} />
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: INK2, letterSpacing: 5 }}>
+                🏆 CAMPEÓN DEL MUNDIAL 2026
               </div>
-              <div style={{ display: "flex", fontSize: 44, fontWeight: 700, color: INK }}>
-                {hits}/{total}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 24 }}>
+                <div style={{ display: "flex", fontSize: 90, lineHeight: 1.1 }}>{champion.flag}</div>
+                <div style={{ display: "flex", fontSize: 96, fontWeight: 800, color: GOLD, lineHeight: 1.1 }}>
+                  {champion.champion}
+                </div>
               </div>
-            </div>
-            <div style={{ display: "flex", fontSize: 26, color: INK2 }}>
-              {live
-                ? "resultado más probable vs resultado real — grupos y eliminatorias"
-                : "partidos nunca vistos por el modelo — validación temporal honesta"}
+              <div style={{ display: "flex", fontSize: 40, fontWeight: 700, color: INK, marginTop: 6 }}>
+                {champion.champion} {champion.score1}–{champion.score2} {champion.runnerUp}
+              </div>
+              <div style={{ display: "flex", fontSize: 26, color: INK2, marginTop: 4 }}>
+                Récord del modelo: {hits}/{total} aciertos ({pct}%)
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div style={{ display: "flex", flex: 1, alignItems: "center", gap: 48 }}>
+            <div style={{ display: "flex", width: 10, height: 260, background: GOLD_DIM, borderRadius: 5 }} />
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: INK2, letterSpacing: 5 }}>
+                {live ? "ACIERTOS DEL MODELO · MUNDIAL 2026" : "BACKTEST QATAR 2022 · 64 PARTIDOS"}
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 28 }}>
+                <div style={{ display: "flex", fontSize: 190, fontWeight: 800, color: GOLD, lineHeight: 1.1 }}>
+                  {pct}%
+                </div>
+                <div style={{ display: "flex", fontSize: 44, fontWeight: 700, color: INK }}>
+                  {hits}/{total}
+                </div>
+              </div>
+              <div style={{ display: "flex", fontSize: 26, color: INK2 }}>
+                {live
+                  ? "resultado más probable vs resultado real — grupos y eliminatorias"
+                  : "partidos nunca vistos por el modelo — validación temporal honesta"}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* pie: juego limpio + dominio de la web */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
